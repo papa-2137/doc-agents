@@ -1,0 +1,29 @@
+# Konfiguracja doc-agents. Ścieżki względne liczone od położenia tego pliku.
+# Klucz i adres endpointu NIE są tu zapisane – config trzyma tylko nazwy zmiennych środowiskowych.
+
+llm:
+  profiles:
+    small:
+      provider: openai_compatible
+      model: claude-haiku-5-5
+      api_key_env: LLM_API_KEY
+      base_url_env: LLM_BASE_URL
+      structured_output_method: function_calling
+      params: { temperature: 0.0, max_tokens: 4096 }
+    medium:
+      provider: openai_compatible
+      model: claude-sonnet-5-5
+      api_key_env: LLM_API_KEY
+      base_url_env: LLM_BASE_URL
+      structured_output_method: function_calling
+      params: { temperature: 0.0, max_tokens: 8192 }
+  agents:
+    planner: small
+    analyst: small
+    editor: small
+    reviewer: small
+
+paths:
+  prompts: prompts
+  knowledge_base: knowledge_base
+  runs: runs
