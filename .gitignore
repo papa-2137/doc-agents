@@ -221,3 +221,21 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# --- doc-agents ---
+# Wyniki uruchomień: zawierają opisy i fragmenty analizowanego (firmowego) kodu
+runs/
+
+# Klucze i certyfikaty: nigdy w repo (sekrety tylko w zmiennych środowiskowych)
+*.pfx
+*.p12
+*.pem
+*.key
+*.crt
+# wyjątek: fałszywe certyfikaty przykładowego robota (krok 9)
+!examples/sample_robot/certs/*
+
+# Windows / Office
+Thumbs.db
+desktop.ini
+~$*
