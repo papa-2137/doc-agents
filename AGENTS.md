@@ -59,6 +59,19 @@ Przepływ grafu: `scan → planner → analyst × N (Send) → editor → review
 11. **Sekrety:** pliki pasujące do `secret_patterns` (certyfikaty, klucze, `.env`) trafiają do modelu wyłącznie jako metadane, nigdy jako treść.
 12. **Konfiguracja:** jeden `config.yaml` w katalogu głównym. Wynik działania: jeden plik Markdown; jego szablon jest w `knowledge_base/output_template.md`, nie w kodzie.
 
+## Styl kodu
+
+1. **Oddzielaj logikę od wyświetlania.** Funkcje liczące i testujące zwracają wartości i niczego nie wypisują. Wypisywanie (`print`) jest wyłącznie w osobnych funkcjach wyświetlających (np. `print_results`), które dostają gotowe dane i tylko je formatują.
+2. **`main()` jako spis treści.** `main()` wywołuje kolejne kroki po kolei (argumenty → dane → logika → wyświetlenie) i nie zawiera szczegółów ani długich bloków `print`.
+3. **Plik podzielony na sekcje** z komentarzami-nagłówkami, np. `# --- Logika ---`, `# --- Wyświetlanie ---`, `# --- Uruchomienie ---`, w kolejności od elementów podstawowych do `main()`.
+4. **Wynik przed `return` przypisuj do zmiennej o opisowej nazwie**, zamiast zwracać długie wyrażenie lub f-string wprost:
+   ```python
+   opis_danych_ze_schematu = f"{capital.capital}, {capital.population_millions} mln"
+   return opis_danych_ze_schematu
+   ```
+5. **Bez stałych na poziomie modułu, jeśli używa ich tylko jedna funkcja.** Taka wartość (słownik, domyślna ścieżka itp.) jest zmienną lokalną tej funkcji - nie da się jej wtedy przypadkiem zmienić ani zaimportować z zewnątrz.
+6. **Docstring modułu dla innego programisty:** na początku pliku krótko co moduł robi, po co, jak go uruchomić i jak czytać wynik.
+
 ## Nie proponuj bez wyraźnej prośby
 
 - Rezygnacji z LangGraph na rzecz własnego pipeline'u.
