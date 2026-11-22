@@ -48,3 +48,15 @@ scan:
     - Thumbs.db
     - desktop.ini
     - "~$*"
+
+  # Pliki z sekretami (certyfikaty, klucze, .env): do modelu trafiają tylko metadane (nazwa, rozmiar),
+  # nigdy treść - skaner nawet ich nie otwiera. Sprawdzane jako pierwsze, wygrywają z każdą inną regułą.
+  secret_patterns: ["*.pfx", "*.p12", "*.pem", "*.key", "*.crt", ".env*"]
+  # Role plików innych niż kod źródłowy (kod rozpoznaje technologia projektu, np. .py dla Pythona).
+  # Kolejność ról ma znaczenie - wygrywa pierwsza pasująca (np. requirements*.txt jako config przed *.txt jako data).
+  # Plik niepasujący do niczego: binary, jeśli wygląda na binarny (bajt zerowy w pierwszych 8 KB), inaczej other.
+  role_patterns:
+    config: ["*.yml", "*.yaml", "*.json", "*.toml", "*.ini", "*.cfg", "*.conf", "*.config", "requirements*.txt", ".git*"]
+    docs: ["*.md", "*.rst", "README*", "*.docx", "*.doc", "*.pdf", "*.pptx"]
+    data: ["*.csv", "*.tsv", "*.txt", "*.xlsx", "*.xlsm", "*.xls", "*.db", "*.sqlite", "*.xml", "*.log"]
+    binary: ["*.png", "*.jpg", "*.jpeg", "*.gif", "*.bmp", "*.ico", "*.exe", "*.dll", "*.zip", "*.7z", "*.whl", "*.jar"]
