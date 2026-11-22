@@ -1,4 +1,4 @@
-"""Skaner projektu: lista plików dokumentowanego projektu i rola każdego pliku.
+"""Skaner projektu: lista plików dokumentowanego projektu, rola każdego pliku i przynależność do frameworku.
 
 Co robi:
     1. list_files() - przechodzi po katalogu projektu i zwraca posortowane ścieżki względne
@@ -6,7 +6,8 @@ Co robi:
        (np. .git, __pycache__, *.pyc) oraz zawsze - środowiska wirtualne Pythona, rozpoznawane
        po pliku pyvenv.cfg, a nie po nazwie (venv bywa nazwany dowolnie, np. test-venv).
     2. build_file_entries() - nadaje każdemu plikowi rolę (source, config, data, secret,
-       binary, docs, other) i rozmiar; wynik to lista FileEntry do mapy projektu.
+       binary, docs, other), rozmiar i nazwę frameworku, jeśli plik do niego należy;
+       wynik to lista FileEntry do mapy projektu.
 
 Jak ustalana jest rola (pierwsza pasująca reguła wygrywa):
     secret  - nazwa pasuje do `scan.secret_patterns` (certyfikaty, klucze, .env). Sprawdzane
@@ -17,12 +18,18 @@ Jak ustalana jest rola (pierwsza pasująca reguła wygrywa):
     binary / other - plik niepasujący do niczego: binary, jeśli wygląda na binarny
               (bajt zerowy w pierwszych 8 KB i brak znacznika BOM), w przeciwnym razie other.
 
-Wszystkie wzorce są w stylu powłoki (fnmatch: *, ?, [abc]) i porównywane z samą nazwą pliku
-lub katalogu (nie z całą ścieżką), bez rozróżniania wielkości liter. Skaner nie czyta treści plików (poza pierwszymi 8 KB pliku
-o nieznanym typie) i niczego nie uruchamia. Oznaczanie plików frameworku i budowa całej mapy
-projektu to kolejne funkcje tego modułu (kroki 18-19 planu).
+Framework (`scan.frameworks`): słownik nazwa frameworku -> wzorce ścieżek. Plik pasujący do wzorców
+dostaje framework_name; pozostałe pliki mają framework_name "" - to kod projektu. Dotyczy
+frameworku skopiowanego do katalogu projektu; framework instalowany jako pakiet (pip) nie leży
+w projekcie i widać go tylko w importach.
 
-Uruchomienie testowe z katalogu repo (wypisuje tabelę: ścieżka, rola, rozmiar):
+Wszystkie wzorce są w stylu powłoki (fnmatch: *, ?, [abc]) i nie rozróżniają wielkości liter.
+Wzorce ignore, sekretów i ról porównujemy z samą nazwą pliku lub katalogu, wzorce frameworków -
+z całą ścieżką względną (separator "/"; * obejmuje też podkatalogi, np. "framework/*").
+Skaner nie czyta treści plików (poza pierwszymi 8 KB pliku o nieznanym typie) i niczego nie
+uruchamia. Budowa całej mapy projektu to kolejna funkcja tego modułu (krok 19 planu).
+
+Uruchomienie testowe z katalogu repo (wypisuje tabelę: ścieżka, rola, framework, rozmiar):
     python -m doc_agents.scanner <katalog projektu>
 """
 
@@ -40,9 +47,9 @@ from doc_agents.technologies.base import Technology
 
 
 def matches_any(name: str, patterns: list[str]) -> bool:
-    """Sprawdza, czy nazwa pliku lub katalogu pasuje do któregoś wzorca z listy.
+    """Sprawdza, czy nazwa (pliku lub katalogu) albo ścieżka względna pasuje do któregoś wzorca z listy.
 
-    Po co: jedno miejsce porównywania nazw z regułami z configu (ignore, sekrety, role),
+    Po co: jedno miejsce porównywania nazw i ścieżek z regułami z configu (ignore, sekrety, role, frameworki),
     żeby wszystkie reguły działały tak samo. Wielkość liter nie ma znaczenia w każdym systemie
     (jak w Windows), żeby np. NOTES.TXT pasowało do wzorca "*.txt".
     """
@@ -161,19 +168,36 @@ def classify_file(root: str, path: str, scan: ScanConfig, technology: Technology
     return rola_pliku
 
 
+def framework_for_path(path: str, frameworks: dict[str, list[str]]) -> str:
+    """Zwraca nazwę pierwszego frameworku z scan.frameworks, do którego wzorców pasuje ścieżka pliku; "" gdy żadnego.
+
+    Po co: pliki frameworku skopiowanego do projektu nie są kodem robota - dokumentacja
+    ma je opisać ogólnie (z bazy wiedzy), a analitycy skupić się na kodzie projektu.
+    Słownik zamiast jednej listy, bo w projekcie może być kilka frameworków (lub kilka wersji).
+    Argument path: ścieżka względna z separatorem "/".
+    """
+    nazwa_frameworku = ""
+    for framework_name, patterns in frameworks.items():
+        if matches_any(path, patterns):
+            nazwa_frameworku = framework_name
+            break
+    return nazwa_frameworku
+
+
 def build_file_entries(root: str, files: list[str], scan: ScanConfig, technology: Technology | None) -> list[FileEntry]:
-    """Zwraca listę FileEntry (ścieżka, rola, rozmiar w bajtach) dla podanych plików projektu.
+    """Zwraca listę FileEntry (ścieżka, rola, rozmiar w bajtach, nazwa frameworku) dla podanych plików projektu.
 
     Po co: z tej listy powstaje mapa projektu (krok 19) - planner widzi wszystkie pliki
-    z rolami i rozmiarami, a kolejne etapy wiedzą, które pliki wolno czytać.
-    framework_name zostaje puste - pliki frameworku oznacza osobny krok (18).
+    z rolami, rozmiarami i przynależnością do frameworku, a kolejne etapy wiedzą,
+    które pliki wolno czytać i które są kodem projektu.
     """
     root_abs = os.path.abspath(root)
     wpisy_plikow = []
     for path in files:
         rola_pliku = classify_file(root_abs, path, scan, technology)
         rozmiar_pliku = os.path.getsize(os.path.join(root_abs, path))
-        wpis = FileEntry(path=path, role=rola_pliku, size_bytes=rozmiar_pliku)
+        nazwa_frameworku = framework_for_path(path, scan.frameworks)
+        wpis = FileEntry(path=path, role=rola_pliku, size_bytes=rozmiar_pliku, framework_name=nazwa_frameworku)
         wpisy_plikow.append(wpis)
     return wpisy_plikow
 
@@ -182,26 +206,33 @@ def build_file_entries(root: str, files: list[str], scan: ScanConfig, technology
 
 
 def print_file_table(root: str, technology: Technology | None, entries: list[FileEntry]) -> None:
-    """Wypisuje katalog projektu, rozpoznaną technologię, tabelę plików (ścieżka, rola, rozmiar) i liczbę plików w każdej roli.
+    """Wypisuje katalog projektu, rozpoznaną technologię, tabelę plików (ścieżka, rola, framework, rozmiar)
+    i liczbę plików w każdej roli. Pusty framework (kod projektu) wypisuje jako "-".
 
     Po co: podgląd wyniku skanera przy uruchomieniu testowym - od razu widać, czy reguły
-    pominęły to, co trzeba, i czy role są nadane sensownie (np. certyfikat jako secret).
+    pominęły to, co trzeba, czy role są nadane sensownie (np. certyfikat jako secret)
+    i które pliki należą do frameworku.
     """
     technology_name = "(nie rozpoznano)"
     if technology is not None:
         technology_name = technology.name
     path_width = len("Ścieżka")
+    framework_width = len("Framework")
     for entry in entries:
         path_width = max(path_width, len(entry.path))
+        framework_width = max(framework_width, len(entry.framework_name))
 
     print(f"Projekt:     {os.path.abspath(root)}")
     print(f"Technologia: {technology_name}")
     print(f"Plików:      {len(entries)}\n")
-    print(f"  {'Ścieżka':<{path_width}}  {'Rola':<7}  {'Rozmiar':>10}")
-    print(f"  {'-' * path_width}  {'-' * 7}  {'-' * 10}")
+    print(f"  {'Ścieżka':<{path_width}}  {'Rola':<7}  {'Framework':<{framework_width}}  {'Rozmiar':>10}")
+    print(f"  {'-' * path_width}  {'-' * 7}  {'-' * framework_width}  {'-' * 10}")
     for entry in entries:
         rozmiar_kb = f"{entry.size_bytes / 1024:.1f} KB"
-        print(f"  {entry.path:<{path_width}}  {entry.role:<7}  {rozmiar_kb:>10}")
+        framework_do_wypisania = "-"
+        if entry.framework_name != "":
+            framework_do_wypisania = entry.framework_name
+        print(f"  {entry.path:<{path_width}}  {entry.role:<7}  {framework_do_wypisania:<{framework_width}}  {rozmiar_kb:>10}")
 
     role_counts = {}
     for entry in entries:

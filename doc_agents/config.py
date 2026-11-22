@@ -52,6 +52,7 @@ class ScanConfig(BaseModel):
     ignore: list[str]  # wzorce nazw plików i katalogów do pominięcia (fnmatch, np. "*.pyc"); venv pomijany zawsze
     secret_patterns: list[str]  # pliki z sekretami - do modelu tylko metadane, nigdy treść
     role_patterns: dict[str, list[str]]  # rola -> wzorce nazw; kolejność ról ma znaczenie (wygrywa pierwsza pasująca)
+    frameworks: dict[str, list[str]]  # nazwa frameworku -> wzorce ścieżek względnych; {} = brak frameworku w projekcie
 
 
 class AppConfig(BaseModel):

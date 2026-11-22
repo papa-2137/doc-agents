@@ -60,3 +60,8 @@ scan:
     docs: ["*.md", "*.rst", "README*", "*.docx", "*.doc", "*.pdf", "*.pptx"]
     data: ["*.csv", "*.tsv", "*.txt", "*.xlsx", "*.xlsm", "*.xls", "*.db", "*.sqlite", "*.xml", "*.log"]
     binary: ["*.png", "*.jpg", "*.jpeg", "*.gif", "*.bmp", "*.ico", "*.exe", "*.dll", "*.zip", "*.7z", "*.whl", "*.jar"]
+  # Framework skopiowany do katalogu projektu (nie kod robota): nazwa frameworku -> wzorce ścieżek względnych.
+  # Wzorce porównywane z całą ścieżką z separatorem "/"; * obejmuje też podkatalogi.
+  # Framework instalowany jako pakiet (pip) nie leży w projekcie - widać go tylko w importach, tu go nie wpisujemy.
+  # Przykład:  frameworks: { roboforge: ["roboforge_framework/*"], reframework: ["Framework/*"] }
+  frameworks: {}
