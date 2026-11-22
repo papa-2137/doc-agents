@@ -11,11 +11,14 @@ Jedyne miejsce w projekcie, które importuje `ast` (reguła z AGENTS.md).
 Stan implementacji:
     - outline()        - gotowe (krok 12),
     - imports()        - gotowe (krok 13),
-    - detect(), is_source(), find_entrypoints() - krok 14.
+    - detect(), is_source(), find_entrypoints() - gotowe (krok 14).
 
-Uruchomienie testowe z katalogu repo (szkielet i importy wskazanego pliku):
+Uruchomienie testowe z katalogu repo:
+    python -m doc_agents.technologies.python <katalog projektu>
+        - cały projekt: detect, pliki źródłowe, punkty wejścia
     python -m doc_agents.technologies.python <katalog projektu> <ścieżka pliku względna do katalogu>
-    np. python -m doc_agents.technologies.python ..\\..\\tests\\01_rpa_challange_roboforge src\\parabank_page.py
+        - jeden plik: szkielet i importy
+    np. python -m doc_agents.technologies.python ..\\..\\tests\\01_rpa_challange_roboforge
 Bez argumentów pokazuje szkielet i importy pliku doc_agents/technologies/base.py z tego repo.
 """
 
@@ -288,6 +291,55 @@ def classify_module(root: str, module: str, is_relative: bool) -> str:
     return "external"
 
 
+# --- Funkcje pomocnicze do punktów wejścia ---
+
+
+def is_main_guard(node) -> bool:
+    """Sprawdza, czy instrukcja to blok `if __name__ == "__main__":` (w dowolnej kolejności stron porównania).
+
+    Po co: taki blok oznacza, że plik jest przeznaczony do uruchamiania - to główna wskazówka,
+    od którego pliku startuje projekt.
+    """
+    if not isinstance(node, ast.If) or not isinstance(node.test, ast.Compare):
+        return False
+    compare = node.test
+    if len(compare.ops) != 1 or not isinstance(compare.ops[0], ast.Eq):
+        return False
+    sides = [compare.left, compare.comparators[0]]
+    has_name = any(isinstance(side, ast.Name) and side.id == "__name__" for side in sides)
+    has_main = any(isinstance(side, ast.Constant) and side.value == "__main__" for side in sides)
+    czy_blok_main = has_name and has_main
+    return czy_blok_main
+
+
+def has_main_guard(root: str, path: str) -> bool:
+    """Sprawdza, czy plik .py ma na poziomie modułu blok `if __name__ == "__main__":`. Plik z błędem składni -> False.
+
+    Po co: kod jest tylko parsowany, nie uruchamiany - bezpieczne wykrywanie punktów wejścia
+    także w projektach, które wymagają środowiska robota (przeglądarki, aplikacji, haseł).
+    """
+    with open(os.path.join(root, path), encoding="utf-8-sig", errors="replace") as f:
+        source = f.read()
+    try:
+        tree = ast.parse(source)
+    except SyntaxError:
+        return False
+    czy_ma_blok_main = any(is_main_guard(node) for node in tree.body)
+    return czy_ma_blok_main
+
+
+def entrypoint_sort_key(path: str) -> tuple:
+    """Klucz sortowania punktów wejścia: najpierw main.py/__main__.py, potem pliki płytsze w strukturze katalogów, potem alfabetycznie.
+
+    Po co: w wielu projektach moduły mają własne bloki testowe `if __name__ == "__main__":`,
+    więc punktów wejścia bywa kilka - właściwy start projektu ma być na początku listy.
+    """
+    name = os.path.basename(path)
+    depth = len(path.replace("\\", "/").split("/"))
+    klucz = (0 if name in ("main.py", "__main__.py") else 1, depth, path.lower())
+    return klucz
+
+
 # --- Technologia ---
 
 
@@ -295,6 +347,42 @@ class PythonTechnology(Technology):
     """Projekty w Pythonie."""
 
     name = "python"
+
+    def detect(self, root: str, files: list[str]) -> bool:
+        """Uznaje projekt za pythonowy, gdy jest w nim choć jeden plik źródłowy Pythona (.py, .pyw).
+
+        Po co: implementacja kontraktu Technology.detect() - na tej podstawie narzędzie wybierze
+        obsługę Pythona dla całego projektu.
+        """
+        czy_python = any(self.is_source(path) for path in files)
+        return czy_python
+
+    def is_source(self, path: str) -> bool:
+        """Traktuje jako kod źródłowy pliki .py i .pyw (skrypty Windows uruchamiane bez okna konsoli).
+
+        Po co: implementacja kontraktu Technology.is_source() - tylko te pliki trafią do analityków
+        jako jednostki kodu; konfiguracje, dane i binarki są opisywane metadanymi.
+        """
+        czy_kod = path.lower().endswith((".py", ".pyw"))
+        return czy_kod
+
+    def find_entrypoints(self, root: str, files: list[str]) -> list[str]:
+        """Zwraca punkty wejścia: pliki źródłowe z blokiem `if __name__ == "__main__":` na poziomie modułu
+        oraz pliki main.py i __main__.py; posortowane - main.py/__main__.py, potem płytsze, potem alfabetycznie.
+
+        Po co: implementacja kontraktu Technology.find_entrypoints() - planner i redaktor zaczynają
+        opis projektu od miejsca uruchomienia. Bloki testowe w zwykłych modułach też są wykrywane,
+        dlatego kolejność wskazuje najbardziej prawdopodobny start na początku.
+        """
+        entrypoints = []
+        for path in files:
+            if not self.is_source(path):
+                continue
+            is_main_name = os.path.basename(path) in ("main.py", "__main__.py")
+            if is_main_name or has_main_guard(root, path):
+                entrypoints.append(path)
+        punkty_wejscia = sorted(entrypoints, key=entrypoint_sort_key)
+        return punkty_wejscia
 
     def outline(self, root: str, path: str) -> str:
         """Czyta plik .py (z pominięciem BOM) i zwraca jego szkielet; pusty string, gdy pliku nie da się sparsować.
@@ -341,17 +429,45 @@ class PythonTechnology(Technology):
 
 
 if __name__ == "__main__":
-    if len(sys.argv) == 3:
-        root, path = sys.argv[1], sys.argv[2]
-    else:
-        root, path = os.getcwd(), os.path.join("doc_agents", "technologies", "base.py")
+
+    def list_project_files(root: str) -> list[str]:
+        """Zwraca ścieżki względne wszystkich plików projektu, pomijając .git, __pycache__ i środowiska wirtualne (katalogi z pyvenv.cfg).
+
+        Po co: tymczasowa lista plików tylko do tego testu - właściwe przejście po plikach
+        z regułami ignorowania z configu zrobi skaner (krok 16).
+        """
+        files = []
+        for directory, subdirectories, filenames in os.walk(root):
+            subdirectories[:] = [
+                name for name in subdirectories
+                if name not in (".git", "__pycache__") and not os.path.isfile(os.path.join(directory, name, "pyvenv.cfg"))
+            ]
+            for filename in filenames:
+                files.append(os.path.relpath(os.path.join(directory, filename), root))
+        return files
 
     technology = PythonTechnology()
-    print(f"Plik: {os.path.join(os.path.abspath(root), path)}")
 
-    print("\n=== Szkielet ===\n")
-    print(technology.outline(root, path))
+    if len(sys.argv) == 2:
+        root = sys.argv[1]
+        files = list_project_files(root)
+        source_files = [path for path in files if technology.is_source(path)]
+        print(f"Projekt: {os.path.abspath(root)}")
+        print(f"Plików (bez .git, __pycache__, venv): {len(files)}")
+        print(f"detect:           {technology.detect(root, files)}")
+        print(f"Pliki źródłowe:   {len(source_files)} - {', '.join(sorted(source_files))}")
+        print(f"find_entrypoints: {technology.find_entrypoints(root, files)}")
+    else:
+        if len(sys.argv) == 3:
+            root, path = sys.argv[1], sys.argv[2]
+        else:
+            root, path = os.getcwd(), os.path.join("doc_agents", "technologies", "base.py")
 
-    print("\n=== Importy ===\n")
-    for group, modules in technology.imports(root, path).items():
-        print(f"{group}: {', '.join(modules) if modules else '(brak)'}")
+        print(f"Plik: {os.path.join(os.path.abspath(root), path)}")
+
+        print("\n=== Szkielet ===\n")
+        print(technology.outline(root, path))
+
+        print("\n=== Importy ===\n")
+        for group, modules in technology.imports(root, path).items():
+            print(f"{group}: {', '.join(modules) if modules else '(brak)'}")
