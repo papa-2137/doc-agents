@@ -5,7 +5,7 @@ import os
 
 from doc_agents.config import load_config
 
-# Domyślny config leży obok main.py – działa niezależnie od katalogu, z którego uruchamiamy.
+# Domyślny config leży obok main.py - działa niezależnie od katalogu, z którego uruchamiamy.
 DEFAULT_CONFIG = os.path.join(os.path.dirname(os.path.abspath(__file__)), "config.yaml")
 
 
@@ -20,7 +20,7 @@ def main():
     args = parse_args()
     config = load_config(args.config)
 
-    print("doc-agents – podsumowanie")
+    print("doc-agents - podsumowanie")
     print(f"  config:  {os.path.abspath(args.config)}")
     print(f"  projekt: {os.path.abspath(args.project) if args.project else '(nie podano)'}")
 
