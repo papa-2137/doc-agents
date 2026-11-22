@@ -1,4 +1,4 @@
-"""Skaner projektu: lista plików dokumentowanego projektu, rola każdego pliku i przynależność do frameworku.
+"""Skaner projektu: mapa projektu (ProjectMap) - pliki z rolami, framework, technologia, punkty wejścia i jednostki kodu.
 
 Co robi:
     1. list_files() - przechodzi po katalogu projektu i zwraca posortowane ścieżki względne
@@ -8,6 +8,9 @@ Co robi:
     2. build_file_entries() - nadaje każdemu plikowi rolę (source, config, data, secret,
        binary, docs, other), rozmiar i nazwę frameworku, jeśli plik do niego należy;
        wynik to lista FileEntry do mapy projektu.
+    3. build_project_map() - składa całą mapę projektu: nazwa, technologia, punkty wejścia,
+       pliki i jednostki kodu do analizy (pliki źródłowe kodu projektu, bez frameworku
+       i bez pustych plików). To jedyna funkcja, której potrzebuje reszta narzędzia.
 
 Jak ustalana jest rola (pierwsza pasująca reguła wygrywa):
     secret  - nazwa pasuje do `scan.secret_patterns` (certyfikaty, klucze, .env). Sprawdzane
@@ -27,9 +30,9 @@ Wszystkie wzorce są w stylu powłoki (fnmatch: *, ?, [abc]) i nie rozróżniaj�
 Wzorce ignore, sekretów i ról porównujemy z samą nazwą pliku lub katalogu, wzorce frameworków -
 z całą ścieżką względną (separator "/"; * obejmuje też podkatalogi, np. "framework/*").
 Skaner nie czyta treści plików (poza pierwszymi 8 KB pliku o nieznanym typie) i niczego nie
-uruchamia. Budowa całej mapy projektu to kolejna funkcja tego modułu (krok 19 planu).
+uruchamia.
 
-Uruchomienie testowe z katalogu repo (wypisuje tabelę: ścieżka, rola, framework, rozmiar):
+Uruchomienie testowe z katalogu repo (wypisuje tabelę plików, punkty wejścia, jednostki kodu i mapę jako JSON):
     python -m doc_agents.scanner <katalog projektu>
 """
 
@@ -38,7 +41,7 @@ import os
 import sys
 
 from doc_agents.config import ScanConfig, load_config
-from doc_agents.schemas import FileEntry
+from doc_agents.schemas import CodeUnit, FileEntry, ProjectMap
 from doc_agents.technologies import detect_technology
 from doc_agents.technologies.base import Technology
 
@@ -202,27 +205,83 @@ def build_file_entries(root: str, files: list[str], scan: ScanConfig, technology
     return wpisy_plikow
 
 
+# --- Mapa projektu ---
+
+
+def build_code_units(entries: list[FileEntry]) -> list[CodeUnit]:
+    """Zwraca jednostki kodu do analizy: po jednej na każdy niepusty plik źródłowy kodu projektu (bez plików frameworku).
+
+    Po co: jednostka kodu to zadanie dla jednego analityka (agenta LLM). Pliki frameworku
+    pomijamy, bo nie są kodem robota (opisze je baza wiedzy), a puste pliki (np. pusty
+    __init__.py) - bo nie ma w nich czego analizować, a każde wywołanie modelu kosztuje.
+    Jeden plik = jedna jednostka pasuje do Pythona; technologie, w których proces składa się
+    z kilku plików (np. UiPath), mogą tu później wymagać własnego grupowania.
+    """
+    jednostki_kodu = []
+    for entry in entries:
+        if entry.role != "source":
+            continue
+        if entry.framework_name != "":
+            continue
+        if entry.size_bytes == 0:
+            continue
+        jednostka = CodeUnit(name=entry.path, files=[entry.path])
+        jednostki_kodu.append(jednostka)
+    return jednostki_kodu
+
+
+def build_project_map(root: str, scan: ScanConfig) -> ProjectMap:
+    """Skanuje katalog projektu i zwraca jego mapę: nazwa (nazwa katalogu), ścieżka bezwzględna, technologia,
+    punkty wejścia, pliki z rolami i frameworkiem oraz jednostki kodu do analizy.
+
+    Po co: mapa projektu to wejście dla plannera i zapis w katalogu runu (project_map.json) -
+    cała wiedza o projekcie zebrana bez modelu językowego i bez czytania treści plików.
+    Gdy żadna technologia nie rozpozna projektu, technology jest "", a punktów wejścia brak.
+    """
+    root_abs = os.path.abspath(root)
+    files = list_files(root_abs, scan)
+    technology = detect_technology(root_abs, files)
+    entries = build_file_entries(root_abs, files, scan, technology)
+
+    technology_name = ""
+    entrypoints = []
+    if technology is not None:
+        technology_name = technology.name
+        entrypoints = technology.find_entrypoints(root_abs, files)
+
+    mapa_projektu = ProjectMap(
+        project_name=os.path.basename(root_abs),
+        root=root_abs,
+        technology=technology_name,
+        entrypoints=entrypoints,
+        files=entries,
+        code_units=build_code_units(entries),
+    )
+    return mapa_projektu
+
+
 # --- Wyświetlanie ---
 
 
-def print_file_table(root: str, technology: Technology | None, entries: list[FileEntry]) -> None:
-    """Wypisuje katalog projektu, rozpoznaną technologię, tabelę plików (ścieżka, rola, framework, rozmiar)
+def print_file_table(project_map: ProjectMap) -> None:
+    """Wypisuje katalog projektu, technologię, tabelę plików (ścieżka, rola, framework, rozmiar)
     i liczbę plików w każdej roli. Pusty framework (kod projektu) wypisuje jako "-".
 
     Po co: podgląd wyniku skanera przy uruchomieniu testowym - od razu widać, czy reguły
     pominęły to, co trzeba, czy role są nadane sensownie (np. certyfikat jako secret)
     i które pliki należą do frameworku.
     """
+    entries = project_map.files
     technology_name = "(nie rozpoznano)"
-    if technology is not None:
-        technology_name = technology.name
+    if project_map.technology != "":
+        technology_name = project_map.technology
     path_width = len("Ścieżka")
     framework_width = len("Framework")
     for entry in entries:
         path_width = max(path_width, len(entry.path))
         framework_width = max(framework_width, len(entry.framework_name))
 
-    print(f"Projekt:     {os.path.abspath(root)}")
+    print(f"Projekt:     {project_map.project_name} ({project_map.root})")
     print(f"Technologia: {technology_name}")
     print(f"Plików:      {len(entries)}\n")
     print(f"  {'Ścieżka':<{path_width}}  {'Rola':<7}  {'Framework':<{framework_width}}  {'Rozmiar':>10}")
@@ -243,6 +302,29 @@ def print_file_table(root: str, technology: Technology | None, entries: list[Fil
     print("\nRole: " + ", ".join(opisy_rol))
 
 
+def print_entrypoints_and_units(project_map: ProjectMap) -> None:
+    """Wypisuje punkty wejścia i jednostki kodu do analizy z mapy projektu.
+
+    Po co: przy uruchomieniu testowym widać, od czego projekt startuje i ile wywołań
+    analityka (modelu) będzie potrzebnych - po jednym na jednostkę.
+    """
+    print("\nPunkty wejścia:")
+    for path in project_map.entrypoints:
+        print(f"  {path}")
+    print(f"\nJednostki kodu do analizy: {len(project_map.code_units)}")
+    for unit in project_map.code_units:
+        print(f"  {unit.name}")
+
+
+def print_map_json(project_map: ProjectMap) -> None:
+    """Wypisuje mapę projektu jako JSON (z wcięciami).
+
+    Po co: pokazuje dokładnie to, co trafi do pliku project_map.json w katalogu runu i do plannera.
+    """
+    print("\n=== project_map.json ===\n")
+    print(project_map.model_dump_json(indent=2))
+
+
 # --- Uruchomienie ---
 
 
@@ -259,8 +341,8 @@ def parse_args() -> str:
 
 
 def main() -> None:
-    """Uruchomienie testowe: wczytuje config.yaml z katalogu repo, skanuje projekt z argumentu,
-    rozpoznaje technologię, nadaje role plikom i wypisuje tabelę.
+    """Uruchomienie testowe: wczytuje config.yaml z katalogu repo, buduje mapę projektu z argumentu
+    i wypisuje tabelę plików, punkty wejścia, jednostki kodu oraz mapę jako JSON.
 
     Po co: ręczne sprawdzenie skanera na prawdziwym projekcie bez uruchamiania całego narzędzia.
     """
@@ -268,11 +350,11 @@ def main() -> None:
     repo_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     config = load_config(os.path.join(repo_dir, "config.yaml"))
 
-    files = list_files(root, config.scan)
-    technology = detect_technology(root, files)
-    entries = build_file_entries(root, files, config.scan, technology)
+    project_map = build_project_map(root, config.scan)
 
-    print_file_table(root, technology, entries)
+    print_file_table(project_map)
+    print_entrypoints_and_units(project_map)
+    print_map_json(project_map)
 
 
 if __name__ == "__main__":

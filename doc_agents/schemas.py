@@ -47,7 +47,7 @@ class ProjectMap(BaseModel):
 
     project_name: str
     root: str  # ścieżka bezwzględna do katalogu projektu
-    technology: str  # np. python
+    technology: str  # np. python; "" = nie rozpoznano technologii
     entrypoints: list[str]  # ścieżki względne plików startowych
     files: list[FileEntry]
     code_units: list[CodeUnit]  # pliki źródłowe kodu projektu (bez frameworku)
