@@ -59,16 +59,22 @@ class CountLegs(BaseModel):
 
 
 def tokens(response) -> str:
-    """Zużycie tokenów z odpowiedzi modelu w formie 'X in / Y out'."""
+    """Zwraca zużycie tokenów z odpowiedzi modelu w formie 'X in / Y out'.
+
+    Po co: przy każdym teście widać koszt wywołania - przydatne do porównania metod structured output
+    i modeli (np. function_calling zużywa wyraźnie więcej tokenów wejściowych niż json_schema).
+    """
     usage = response.usage_metadata or {}
     komunikat_zuzycie_tokenow = f"{usage.get('input_tokens', '?')} in / {usage.get('output_tokens', '?')} out"
     return komunikat_zuzycie_tokenow
 
 
 def check(func, *args) -> tuple[bool, float, str]:
-    """Uruchamia jeden test i mierzy czas. Nic nie wypisuje.
-
+    """Uruchamia jeden test, mierzy czas i łapie każdy wyjątek. Nic nie wypisuje.
     Zwraca (czy_ok, czas_s, opis): opis to wynik testu albo - przy błędzie - nazwa i treść wyjątku.
+
+    Po co: błąd jednego testu (np. nieobsługiwana metoda) nie może przerwać pozostałych - diagnoza
+    ma pokazać pełny obraz możliwości modelu, łącznie z tym, czego nie potrafi.
     """
     start = time.time()
     try:
@@ -86,12 +92,22 @@ def check(func, *args) -> tuple[bool, float, str]:
 
 
 def test_simple(model) -> str:
+    """Wysyła do modelu najprostsze zapytanie i zwraca opis odpowiedzi z tokenami.
+
+    Po co: podstawowy test połączenia - jeśli nie przejdzie, problem jest w kluczu, adresie,
+    nazwie modelu albo params, a nie w bardziej złożonych funkcjach.
+    """
     response = model.invoke("Odpowiedz jednym słowem: test")
     opis_odpowiedzi = f"odpowiedź: {response.content!r}, tokeny: {tokens(response)}"
     return opis_odpowiedzi
 
 
 def test_system_user(model) -> str:
+    """Wysyła wiadomość systemową (odpowiadaj WIELKIMI LITERAMI) i wiadomość użytkownika; rzuca ValueError, gdy model zignoruje instrukcję.
+
+    Po co: agenci działają na parze prompt systemowy + prompt użytkownika - trzeba mieć pewność,
+    że endpoint przekazuje wiadomość systemową, a model się jej trzyma.
+    """
     response = model.invoke([
         SystemMessage("Odpowiadasz wyłącznie WIELKIMI LITERAMI."),
         HumanMessage("Napisz słowo: kot"),
@@ -104,6 +120,11 @@ def test_system_user(model) -> str:
 
 
 def test_structured(model, method: str) -> str:
+    """Prosi model o dane w schemacie Capital wskazaną metodą structured output i zwraca opis wyniku; rzuca wyjątek, gdy model nie zwróci danych w schemacie.
+
+    Po co: agenci zwracają wyniki jako obiekty Pydantic - test pokazuje, którą metodę
+    (function_calling, json_schema, json_mode) dany model i endpoint naprawdę obsługują.
+    """
     structured = model.with_structured_output(Capital, method=method, include_raw=True)
     result = structured.invoke(
         "Podaj stolicę Polski i przybliżoną liczbę mieszkańców tego miasta (samej stolicy) w milionach. "
@@ -119,6 +140,11 @@ def test_structured(model, method: str) -> str:
 
 
 def test_tools(model) -> str:
+    """Udostępnia modelowi narzędzie CountLegs i sprawdza, czy model poprosi o jego wywołanie; narzędzie nie jest uruchamiane.
+
+    Po co: tool calling to osobna funkcja endpointu (np. na firmowej bramce może nie działać) -
+    wiedza o niej przyda się, gdyby agenci mieli kiedyś korzystać z narzędzi.
+    """
     response = model.bind_tools([CountLegs]).invoke("Ile nóg ma stonoga? Użyj narzędzia.")
     if not response.tool_calls:
         raise ValueError(f"model nie wywołał narzędzia, odpowiedź: {str(response.content)[:100]!r}")
@@ -131,7 +157,11 @@ def test_tools(model) -> str:
 
 
 def run_tests(model) -> dict:
-    """Uruchamia wszystkie testy. Zwraca słownik: nazwa testu -> (czy_ok, czas_s, opis)."""
+    """Uruchamia wszystkie testy przez check(). Zwraca słownik: nazwa testu -> (czy_ok, czas_s, opis).
+
+    Po co: oddziela wykonanie testów od wyświetlania - wyniki trafiają najpierw do danych,
+    a dopiero potem do diagnozy i na ekran.
+    """
     wyniki = {
         "invoke": check(test_simple, model),
         "system + user": check(test_system_user, model),
@@ -144,7 +174,12 @@ def run_tests(model) -> dict:
 
 
 def diagnose(wyniki: dict, obecna_metoda: str) -> dict:
-    """Na podstawie wyników ustala działające metody structured output i rekomendację dla configu."""
+    """Na podstawie wyników ustala działające metody structured output, rekomendowaną metodę
+    (pierwsza działająca w kolejności: function_calling, json_schema, json_mode) i czy metoda z configu działa.
+
+    Po co: cała decyzja o rekomendacji jest w jednym miejscu, bez wypisywania - wynik mówi wprost,
+    jaką wartość structured_output_method wpisać w profilu w config.yaml.
+    """
     # Kolejność preferencji: function_calling, json_schema, json_mode.
     dzialajace_metody = [m for m in ["function_calling", "json_schema", "json_mode"] if wyniki[m][0]]
     rekomendowana = dzialajace_metody[0] if dzialajace_metody else None
@@ -162,6 +197,10 @@ def diagnose(wyniki: dict, obecna_metoda: str) -> dict:
 
 
 def print_header(nazwa_profilu: str, profile) -> None:
+    """Wypisuje nagłówek: nazwę profilu, model, nazwy zmiennych środowiskowych, params i metodę z configu.
+
+    Po co: widać, jaki profil jest testowany i z jakimi ustawieniami - bez wypisywania wartości kluczy.
+    """
     print(f"Profil: {nazwa_profilu}")
     print(f"  model:    {profile.model} ({profile.provider})")
     print(f"  endpoint: zmienna {profile.base_url_env}, klucz: zmienna {profile.api_key_env}")
@@ -171,6 +210,10 @@ def print_header(nazwa_profilu: str, profile) -> None:
 
 
 def print_results(wyniki: dict) -> None:
+    """Wypisuje wyniki testów w sekcjach, jedna linia na test: OK/FAIL, nazwa, czas, opis.
+
+    Po co: czytelny raport dla człowieka; tylko formatuje gotowe dane z run_tests().
+    """
     sekcje = [
         ("1. Proste wywołanie", ["invoke"]),
         ("2. Wiadomości system + user", ["system + user"]),
@@ -186,6 +229,10 @@ def print_results(wyniki: dict) -> None:
 
 
 def print_diagnosis(diagnoza: dict) -> None:
+    """Wypisuje diagnozę: brak połączenia, brak działających metod albo listę działających metod z rekomendacją i oceną wartości z configu.
+
+    Po co: końcowa odpowiedź skryptu - co wpisać w config.yaml dla tego profilu; tylko formatuje gotową diagnozę.
+    """
     print("\nDiagnoza")
     if not diagnoza["polaczenie_ok"]:
         print("  Brak podstawowego połączenia - sprawdź zmienne środowiskowe, nazwę modelu i params (patrz błąd w punkcie 1).")
@@ -209,6 +256,11 @@ def print_diagnosis(diagnoza: dict) -> None:
 
 
 def parse_args():
+    """Odczytuje argumenty: --profile (wymagany) i --config (domyślnie config.yaml w katalogu repo).
+
+    Po co: skrypt testuje jeden profil naraz, żeby wyniki różnych modeli się nie mieszały;
+    domyślna ścieżka configu działa niezależnie od katalogu uruchomienia.
+    """
     default_config = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "config.yaml")
     parser = argparse.ArgumentParser(description="Diagnostyka profilu modelu z config.yaml.")
     parser.add_argument("--profile", required=True, help="nazwa profilu z sekcji llm.profiles")
@@ -217,7 +269,10 @@ def parse_args():
 
 
 def load_profile(config_path: str, nazwa_profilu: str):
-    """Wczytuje config i zwraca wskazany profil; przy złej nazwie kończy program z listą dostępnych."""
+    """Wczytuje config i zwraca wskazany profil; przy złej nazwie kończy program z listą dostępnych profili.
+
+    Po co: literówka w nazwie profilu ma dać od razu czytelny komunikat, a nie wyjątek w środku testów.
+    """
     config = load_config(config_path)
     if nazwa_profilu not in config.llm.profiles:
         raise SystemExit(f"Nie ma profilu '{nazwa_profilu}'. Dostępne profile: {list(config.llm.profiles)}")
@@ -225,6 +280,10 @@ def load_profile(config_path: str, nazwa_profilu: str):
 
 
 def main():
+    """Uruchamia diagnostykę: argumenty -> profil -> nagłówek -> model -> testy -> diagnoza -> wyniki.
+
+    Po co: spis treści skryptu - kolejność kroków widać w kilku liniach, szczegóły są w osobnych funkcjach.
+    """
     args = parse_args()
     profile = load_profile(args.config, args.profile)
     print_header(args.profile, profile)

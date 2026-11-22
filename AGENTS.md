@@ -71,6 +71,19 @@ Przepływ grafu: `scan → planner → analyst × N (Send) → editor → review
    ```
 5. **Bez stałych na poziomie modułu, jeśli używa ich tylko jedna funkcja.** Taka wartość (słownik, domyślna ścieżka itp.) jest zmienną lokalną tej funkcji - nie da się jej wtedy przypadkiem zmienić ani zaimportować z zewnątrz.
 6. **Docstring modułu dla innego programisty:** na początku pliku krótko co moduł robi, po co, jak go uruchomić i jak czytać wynik.
+7. **Docstring w każdej funkcji i metodzie: CO robi i PO CO.** Każda funkcja i metoda, którą tworzymy (także pomocnicza, testowa i `main()`), ma docstring w stałym formacie:
+   - **pierwszy akapit - CO robi**: jedno-dwa zdania, bez powtarzania nazwy funkcji (ten akapit trafia też do szkieletu pliku, więc ma być samodzielnie zrozumiały),
+   - **drugi akapit zaczyna się od `Po co:`** - jaką rolę funkcja pełni w narzędziu, kto korzysta z wyniku, jaki problem rozwiązuje,
+   - dalej, gdy potrzebne: argumenty i wynik (jeśli nie są oczywiste z nazw i typów) oraz nietypowe zachowania (np. co zwraca przy błędzie).
+   ```python
+   def is_project_module(root: str, module: str) -> bool:
+       """Sprawdza, czy moduł o podanej pełnej nazwie (np. 'src.report') istnieje w katalogu projektu jako plik .py lub folder.
+
+       Po co: od tego zależy, czy import trafi do grupy internal (współpraca między modułami projektu),
+       czy do external/stdlib (biblioteki).
+       """
+   ```
+   Cel: każdy kawałek kodu ma być zrozumiały dla osoby, która widzi go pierwszy raz, bez szukania kontekstu w innych plikach.
 
 ## Nie proponuj bez wyraźnej prośby
 

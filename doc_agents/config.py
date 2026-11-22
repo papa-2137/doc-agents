@@ -57,7 +57,12 @@ class AppConfig(BaseModel):
 
 
 def check_agent_profiles(config: AppConfig) -> None:
-    """Każdy agent musi wskazywać istniejący profil - inaczej ValueError z listą dostępnych profili."""
+    """Sprawdza, czy każdy agent z sekcji llm.agents wskazuje profil istniejący w llm.profiles.
+    Przy błędzie rzuca ValueError z nazwą agenta, błędnym profilem i listą dostępnych profili.
+
+    Po co: literówka w nazwie profilu wyszłaby inaczej dopiero przy tworzeniu modelu dla agenta,
+    czyli w środku runu (po zużyciu tokenów przez wcześniejsze etapy); tak wychodzi od razu przy starcie.
+    """
     for agent, profile in config.llm.agents.items():
         if profile not in config.llm.profiles:
             komunikat_bledu = (
@@ -68,7 +73,11 @@ def check_agent_profiles(config: AppConfig) -> None:
 
 
 def resolve_paths(paths: PathsConfig, config_dir: str) -> None:
-    """Zamienia ścieżki na bezwzględne: względne liczone od katalogu configu, bezwzględne bez zmian."""
+    """Zamienia ścieżki z sekcji paths na bezwzględne: względne liczy od katalogu configu, bezwzględne zostawia.
+
+    Po co: reszta programu dostaje jednoznaczne ścieżki i działa tak samo bez względu na to,
+    z którego katalogu uruchomiono program ani gdzie leży config.
+    """
     paths.prompts = os.path.abspath(os.path.join(config_dir, paths.prompts))
     paths.knowledge_base = os.path.abspath(os.path.join(config_dir, paths.knowledge_base))
     paths.runs = os.path.abspath(os.path.join(config_dir, paths.runs))
@@ -78,7 +87,11 @@ def resolve_paths(paths: PathsConfig, config_dir: str) -> None:
 
 
 def load_config(path: str) -> AppConfig:
-    """Wczytuje config.yaml, sprawdza przypisania agentów i zamienia ścieżki na bezwzględne."""
+    """Wczytuje config.yaml, zamienia go na obiekty AppConfig, sprawdza przypisania agentów i rozwiązuje ścieżki.
+
+    Po co: jedyne wejście do konfiguracji dla całego narzędzia - każdy moduł dostaje już sprawdzony,
+    typowany config (podpowiedzi w edytorze, dostęp przez atrybuty) zamiast surowego słownika z YAML-a.
+    """
     config_path = os.path.abspath(path)
     with open(config_path, encoding="utf-8") as f:
         raw = yaml.safe_load(f)

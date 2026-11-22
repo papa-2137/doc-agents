@@ -28,7 +28,11 @@ from doc_agents.config import AppConfig, LLMProfile
 
 
 def read_env(name: str) -> str:
-    """Zwraca wartość zmiennej środowiskowej albo rzuca błąd z jej nazwą."""
+    """Zwraca wartość zmiennej środowiskowej o podanej nazwie; gdy jej brak lub jest pusta, rzuca RuntimeError z nazwą zmiennej.
+
+    Po co: klucze i adresy endpointów nie mogą być zapisane w repo ani w configu, więc czytamy je
+    ze zmiennych środowiskowych; czytelny błąd z nazwą zmiennej mówi od razu, co trzeba ustawić.
+    """
     value = os.environ.get(name)
     if not value:
         komunikat_bledu = (
@@ -43,7 +47,12 @@ def read_env(name: str) -> str:
 
 
 def create_openai_compatible(profile: LLMProfile) -> BaseChatModel:
-    """Model mówiący protokołem OpenAI Chat Completions pod adresem ze zmiennej base_url_env."""
+    """Tworzy model ChatOpenAI dla profilu: nazwa modelu z profilu, klucz i adres endpointu ze zmiennych
+    środowiskowych wskazanych w profilu, plus tylko te parametry, które podano w params.
+
+    Po co: zarówno publiczne API, jak i firmowe bramki mówią protokołem OpenAI Chat Completions,
+    więc jedna funkcja obsługuje wszystkie te endpointy - zmienia się tylko config, nie kod.
+    """
     model = ChatOpenAI(
         model=profile.model,
         api_key=read_env(profile.api_key_env),
@@ -54,7 +63,12 @@ def create_openai_compatible(profile: LLMProfile) -> BaseChatModel:
 
 
 def create_chat_model(profile: LLMProfile) -> BaseChatModel:
-    """Tworzy model dla podanego profilu."""
+    """Tworzy model dla profilu, wybierając funkcję tworzącą według pola provider (słownik providers).
+    Nieznany provider -> ValueError z listą obsługiwanych.
+
+    Po co: jedno miejsce decydujące o tym, jak powstaje model; dodanie nowego dostawcy (innego protokołu)
+    to nowa funkcja create_... i jeden wpis w słowniku, bez zmian w reszcie projektu.
+    """
     # Dostawcy: nazwa z configu -> funkcja tworząca model. Nowy dostawca = nowa funkcja powyżej + wpis tutaj.
     providers = {
         "openai_compatible": create_openai_compatible,
@@ -66,7 +80,11 @@ def create_chat_model(profile: LLMProfile) -> BaseChatModel:
 
 
 def get_model_for_agent(config: AppConfig, agent: str) -> BaseChatModel:
-    """Tworzy model z profilu przypisanego agentowi w configu."""
+    """Tworzy model z profilu przypisanego w configu wskazanemu agentowi (np. planner -> small).
+
+    Po co: agenci nie znają nazw modeli ani profili - proszą o model po swojej nazwie, a przełączenie
+    agenta na inny model to zmiana jednej linii w sekcji llm.agents w config.yaml.
+    """
     if agent not in config.llm.agents:
         raise ValueError(f"Agent '{agent}' nie ma przypisanego profilu. Agenci w configu: {list(config.llm.agents)}")
     profile = config.llm.profiles[config.llm.agents[agent]]

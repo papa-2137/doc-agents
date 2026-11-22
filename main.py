@@ -22,6 +22,11 @@ from doc_agents.config import load_config
 
 
 def print_summary(config_path: str, project_path: str | None, config) -> None:
+    """Wypisuje podsumowanie wczytanej konfiguracji: plik configu, projekt, profile modeli, przypisania agentów i ścieżki.
+
+    Po co: na obecnym etapie to jedyny widoczny efekt uruchomienia main.py - pozwala szybko sprawdzić,
+    że config wczytał się poprawnie i ścieżki wskazują właściwe miejsca, zanim dojdzie skanowanie i agenci.
+    """
     print("doc-agents - podsumowanie")
     print(f"  config:  {os.path.abspath(config_path)}")
     print(f"  projekt: {os.path.abspath(project_path) if project_path else '(nie podano)'}")
@@ -44,6 +49,11 @@ def print_summary(config_path: str, project_path: str | None, config) -> None:
 
 
 def parse_args():
+    """Odczytuje argumenty wiersza poleceń: --config (domyślnie config.yaml obok main.py) i --project.
+
+    Po co: jeden punkt, w którym zdefiniowane są opcje programu; domyślna ścieżka configu liczona
+    względem main.py sprawia, że program działa niezależnie od katalogu, z którego go uruchamiamy.
+    """
     default_config = os.path.join(os.path.dirname(os.path.abspath(__file__)), "config.yaml")
     parser = argparse.ArgumentParser(description="Generowanie dokumentacji projektu przez zespół agentów.")
     parser.add_argument("--config", default=default_config, help="ścieżka do pliku konfiguracyjnego (domyślnie: config.yaml obok main.py)")
@@ -53,6 +63,11 @@ def parse_args():
 
 
 def main():
+    """Uruchamia program: argumenty -> wczytanie configu -> podsumowanie.
+
+    Po co: spis treści całego przebiegu - tu będą dochodzić kolejne etapy (skan projektu, graf agentów),
+    a szczegóły każdego z nich zostają w osobnych funkcjach i modułach.
+    """
     args = parse_args()
     config = load_config(args.config)
     print_summary(args.config, args.project, config)
