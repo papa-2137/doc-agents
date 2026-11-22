@@ -27,3 +27,24 @@ paths:
   prompts: prompts
   knowledge_base: knowledge_base
   runs: runs
+
+scan:
+  # Wzorce nazw plików i katalogów pomijanych przy skanowaniu projektu (styl powłoki: * ? [abc]),
+  # porównywane z samą nazwą, nie ze ścieżką. Pasujący katalog jest pomijany razem z zawartością.
+  # Środowiska wirtualne (katalogi z pyvenv.cfg) skaner pomija zawsze, niezależnie od tej listy.
+  ignore:
+    - .git
+    - .svn
+    - __pycache__
+    - .pytest_cache
+    - .mypy_cache
+    - .idea
+    - .vscode
+    - .vs
+    - node_modules
+    - venv
+    - .venv
+    - "*.pyc"
+    - Thumbs.db
+    - desktop.ini
+    - "~$*"

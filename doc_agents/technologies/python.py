@@ -429,31 +429,19 @@ class PythonTechnology(Technology):
 
 
 if __name__ == "__main__":
-
-    def list_project_files(root: str) -> list[str]:
-        """Zwraca ścieżki względne wszystkich plików projektu, pomijając .git, __pycache__ i środowiska wirtualne (katalogi z pyvenv.cfg).
-
-        Po co: tymczasowa lista plików tylko do tego testu - właściwe przejście po plikach
-        z regułami ignorowania z configu zrobi skaner (krok 16).
-        """
-        files = []
-        for directory, subdirectories, filenames in os.walk(root):
-            subdirectories[:] = [
-                name for name in subdirectories
-                if name not in (".git", "__pycache__") and not os.path.isfile(os.path.join(directory, name, "pyvenv.cfg"))
-            ]
-            for filename in filenames:
-                files.append(os.path.relpath(os.path.join(directory, filename), root))
-        return files
+    from doc_agents.config import load_config
+    from doc_agents.scanner import list_files
 
     technology = PythonTechnology()
 
     if len(sys.argv) == 2:
         root = sys.argv[1]
-        files = list_project_files(root)
+        repo_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+        config = load_config(os.path.join(repo_dir, "config.yaml"))
+        files = list_files(root, config.scan)
         source_files = [path for path in files if technology.is_source(path)]
         print(f"Projekt: {os.path.abspath(root)}")
-        print(f"Plików (bez .git, __pycache__, venv): {len(files)}")
+        print(f"Plików (po regułach skanera): {len(files)}")
         print(f"detect:           {technology.detect(root, files)}")
         print(f"Pliki źródłowe:   {len(source_files)} - {', '.join(sorted(source_files))}")
         print(f"find_entrypoints: {technology.find_entrypoints(root, files)}")

@@ -46,11 +46,18 @@ class PathsConfig(BaseModel):
     runs: str
 
 
+class ScanConfig(BaseModel):
+    """Sekcja `scan`: reguły przejścia po plikach dokumentowanego projektu."""
+
+    ignore: list[str]  # wzorce nazw plików i katalogów do pominięcia (fnmatch, np. "*.pyc"); venv pomijany zawsze
+
+
 class AppConfig(BaseModel):
     """Cały config.yaml."""
 
     llm: LLMConfig
     paths: PathsConfig
+    scan: ScanConfig
 
 
 # --- Sprawdzenia i przetwarzanie ---
