@@ -224,7 +224,7 @@ __marimo__/
 
 # --- doc-agents ---
 # Wyniki uruchomień: zawierają opisy i fragmenty analizowanego (firmowego) kodu
-runs/
+/output/
 
 # Klucze i certyfikaty: nigdy w repo (sekrety tylko w zmiennych środowiskowych)
 *.pfx

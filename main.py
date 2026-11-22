@@ -42,7 +42,6 @@ def print_summary(config_path: str, project_path: str | None, config) -> None:
     print("  ścieżki:")
     print(f"    prompts:        {config.paths.prompts}")
     print(f"    knowledge_base: {config.paths.knowledge_base}")
-    print(f"    runs:           {config.paths.runs}")
 
 
 # --- Uruchomienie ---

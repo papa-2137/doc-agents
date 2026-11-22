@@ -43,7 +43,6 @@ class PathsConfig(BaseModel):
 
     prompts: str
     knowledge_base: str
-    runs: str
 
 
 class ScanConfig(BaseModel):
@@ -90,7 +89,6 @@ def resolve_paths(paths: PathsConfig, config_dir: str) -> None:
     """
     paths.prompts = os.path.abspath(os.path.join(config_dir, paths.prompts))
     paths.knowledge_base = os.path.abspath(os.path.join(config_dir, paths.knowledge_base))
-    paths.runs = os.path.abspath(os.path.join(config_dir, paths.runs))
 
 
 # --- Wczytywanie ---

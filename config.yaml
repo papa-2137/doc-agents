@@ -26,7 +26,6 @@ llm:
 paths:
   prompts: prompts
   knowledge_base: knowledge_base
-  runs: runs
 
 scan:
   # Wzorce nazw plików i katalogów pomijanych przy skanowaniu projektu (styl powłoki: * ? [abc]),

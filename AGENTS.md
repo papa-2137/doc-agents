@@ -24,7 +24,7 @@ Przepływ grafu: `scan → planner → analyst × N (Send) → editor → review
 | `knowledge_base/knowledge/` | baza wiedzy (Markdown) wybierana przez plannera; spis w `index.md` - zwykły tekst: nazwa pliku, „Kiedy użyć:”, „Tagi:”, wpisy oddzielone pustą linią |
 | `knowledge_base/templates/` | szablony dokumentu wczytywane zawsze przez kod: `formal_template.yaml` + `formal_template.md`, `descriptive_template.yaml` |
 | `scripts/` | narzędzia diagnostyczne |
-| `runs/` | wyniki uruchomień (poza gitem) |
+| `output/` | wyniki ostatniego uruchomienia - zawsze w katalogu repo (nie w configu), czyszczony przy każdym starcie (poza gitem) |
 
 ## Sposób pracy
 
