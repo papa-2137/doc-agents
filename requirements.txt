@@ -1,2 +1,4 @@
 pyyaml
 pydantic
+langchain-core
+langchain-openai
