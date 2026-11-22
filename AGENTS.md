@@ -6,6 +6,11 @@ Instrukcje dla modeli i asystentów AI, które piszą kod w tym repozytorium. Pr
 
 Zespół agentów (LangGraph) generujący dokumentację istniejących projektów programistycznych, głównie robotów RPA w Pythonie, w postaci jednego pliku Markdown. Odbiorca dokumentacji: deweloper przejmujący projekt, który ma go zrozumieć, utrzymywać i rozwijać.
 
+Dokument ma **dwie części**:
+- **część formalna** - stały format; model wypełnia pola (`FormalSection` = lista par `FormalField(name, value)`), a Markdown składa kod przez szablon Jinja2. Pola: `knowledge_base/templates/formal_template.yaml` (nazwa, instrukcja, typ `text`/`list`, wymagane, źródło `llm`/`scanner`), układ: `knowledge_base/templates/formal_template.md`. Kod nie zna konkretnych pól.
+- **część opisowa** - swobodny Markdown (jak robot działa, przepływ, moduły, wskazówki utrzymaniowe i rozszerzeniowe). Rozdziały proponuje planner, a **stałe elementy** generowane przy każdym uruchomieniu (np. schemat ASCII) definiuje `knowledge_base/templates/descriptive_template.yaml` (tytuł, instrukcja, wymagane). Recenzent sprawdza kodem obecność wymaganych rozdziałów (nagłówek zawiera tytuł, bez rozróżniania wielkości liter), a modelem - ich jakość.
+Zmiana szablonów (dodanie pola albo stałego elementu) to edycja plików w `knowledge_base/templates/`, bez zmian w kodzie.
+
 Przepływ grafu: `scan → planner → analyst × N (Send) → editor → reviewer ⇄ editor → finalize`.
 
 | Miejsce | Zawartość |
@@ -16,7 +21,8 @@ Przepływ grafu: `scan → planner → analyst × N (Send) → editor → review
 | `doc_agents/agents/` | agenci, każdy w osobnym pliku |
 | `doc_agents/technologies/` | obsługa technologii (Python; UiPath jako dummy) |
 | `prompts/<agent>/` | `system.md` + `user.md` |
-| `knowledge_base/` | baza wiedzy (Markdown), spis w `index.md` |
+| `knowledge_base/knowledge/` | baza wiedzy (Markdown) wybierana przez plannera; spis w `index.md` - zwykły tekst: nazwa pliku, „Kiedy użyć:”, „Tagi:”, wpisy oddzielone pustą linią |
+| `knowledge_base/templates/` | szablony dokumentu wczytywane zawsze przez kod: `formal_template.yaml` + `formal_template.md`, `descriptive_template.yaml` |
 | `scripts/` | narzędzia diagnostyczne |
 | `runs/` | wyniki uruchomień (poza gitem) |
 
@@ -57,7 +63,7 @@ Przepływ grafu: `scan → planner → analyst × N (Send) → editor → review
 9. **Prompty:** `prompts/<agent>/system.md` (stałe instrukcje) + `user.md` (szablon Jinja2, `StrictUndefined`). Dane wejściowe zawsze w `user`, opakowane w tagi - ochrona przed prompt injection z analizowanego kodu.
 10. **Stan grafu:** `TypedDict` z modelami Pydantic w środku. Stan jest chudy: ścieżki i metadane, bez pełnego kodu źródłowego. Zależności (modele, prompty, KB, zapis) są w `RunContext`, wstrzykiwane przez `Runtime[RunContext]`.
 11. **Sekrety:** pliki pasujące do `secret_patterns` (certyfikaty, klucze, `.env`) trafiają do modelu wyłącznie jako metadane, nigdy jako treść.
-12. **Konfiguracja:** jeden `config.yaml` w katalogu głównym. Wynik działania: jeden plik Markdown; jego szablon jest w `knowledge_base/output_template.md`, nie w kodzie.
+12. **Konfiguracja:** jeden `config.yaml` w katalogu głównym. Wynik działania: jeden plik Markdown z częścią formalną i opisową; szablony obu części są w `knowledge_base/templates/` (`formal_template.yaml`, `formal_template.md`, `descriptive_template.yaml`), nie w kodzie. Nie wpisuj konkretnych pól ani stałych rozdziałów w kod.
 
 ## Styl kodu
 
