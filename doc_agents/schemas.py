@@ -2,10 +2,11 @@
 
 Co zawiera: opis kształtu danych, które jeden etap produkuje, a następny odbiera:
     skaner -> ProjectMap -> planner -> Plan -> analitycy -> ModuleNote -> redaktor -> recenzent -> ReviewResult
-Na tym etapie: mapa projektu (FileEntry, CodeUnit, ProjectMap) i plan plannera (AnalysisTask,
-DescriptiveSection, Plan). ModuleNote i ReviewResult dojdą w kolejnych krokach.
+Na tym etapie: mapa projektu (FileEntry, CodeUnit, ProjectMap), plan plannera (AnalysisTask,
+DescriptiveSection, Plan) i notatka analityka (ModuleNote). Schematy redaktora i ReviewResult
+dojdą w kolejnych krokach.
 
-Schematy odpowiedzi modelu (Plan i jego części) mają przy polach Field(description="...") - wyjątek
+Schematy odpowiedzi modelu (Plan i jego części, ModuleNote) mają przy polach Field(description="...") - wyjątek
 od zasady prostoty z AGENTS.md: model widzi tylko schemat JSON, a opis pola jedzie razem z nim,
 więc nie rozjedzie się z kodem (komentarze # do modelu nie trafiają). Pozostałe schematy - same typy.
 
@@ -98,6 +99,50 @@ class Plan(BaseModel):
         description="Rozdziały części opisowej w kolejności w dokumencie: wszystkie stałe rozdziały (z niezmienionym "
         "tytułem i instrukcją) oraz rozdziały dodatkowe dopasowane do tego projektu."
     )
+
+# --- Notatka analityka (wynik analityka, schemat odpowiedzi modelu) ---
+
+
+class ModuleNote(BaseModel):
+    """Notatka analityka o jednej jednostce kodu - jedyne źródło wiedzy o kodzie dla redaktora."""
+
+    unit_name: str = Field(description="Nazwa analizowanej jednostki kodu, dokładnie jak w zadaniu.")
+    purpose: str = Field(description="2-4 zdania: do czego służy ta jednostka i jaką rolę pełni w procesie robota.")
+    automated_application: str = Field(
+        description="Aplikacje, strony i systemy, z którymi ta jednostka pracuje (np. 'przeglądarka Edge, "
+        "https://www.rpachallenge.com'); pusty tekst, gdy żadnych."
+    )
+    key_functions: list[str] = Field(
+        description="Najważniejsze funkcje, metody i klasy jednostki, każda jako 'nazwa: co robi'."
+    )
+    process_steps: list[str] = Field(
+        description="Kolejne akcje robota w tej jednostce w kolejności wykonania, jako krótkie zdania z konkretami "
+        "(aplikacje, adresy, przyciski, pola, selektory, pliki, arkusze). Decyzje jako 'Jeśli ..., to ...', "
+        "pętle jako 'Dla każdego ...:' z krokami wciętymi pod spodem. Kroki osobno wywoływanych funkcji "
+        "poprzedzone nazwą funkcji w nawiasach kwadratowych."
+    )
+    error_handling: list[str] = Field(
+        description="Obsługiwane wyjątki i sytuacje błędne oraz to, co robot wtedy robi (ponowienie, pominięcie, "
+        "zatrzymanie, zapis do logu)."
+    )
+    inputs: list[str] = Field(description="Dane wejściowe jednostki: pliki, arkusze, kolumny, parametry, dane ze stron.")
+    outputs: list[str] = Field(description="Wyniki jednostki: zapisywane pliki, tabele, raporty, logi, dane przekazywane dalej.")
+    config_used: list[str] = Field(
+        description="Używana konfiguracja: klucze z plików konfiguracyjnych, zmienne środowiskowe, stałe w kodzie "
+        "(z nazwą i znaczeniem, bez wartości sekretów)."
+    )
+    external_dependencies: list[str] = Field(
+        description="Biblioteki i frameworki spoza projektu, z których korzysta jednostka, z krótkim 'do czego'."
+    )
+    pitfalls: list[str] = Field(
+        description="Pułapki i ryzyka: kruche selektory, sztywne ścieżki i czasy oczekiwania, sekrety w kodzie, "
+        "brak obsługi błędów, niejasne miejsca."
+    )
+    maintainer_hints: list[str] = Field(
+        description="Konkretne wskazówki dla opiekuna: co zmienić przy zmianie strony lub danych, gdzie szukać "
+        "przyczyny błędu, czego nie ruszać."
+    )
+
 
 # --- Test ręczny ---
 

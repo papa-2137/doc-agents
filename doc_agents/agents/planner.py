@@ -31,7 +31,7 @@ from langgraph.runtime import Runtime
 from doc_agents.config import load_config
 from doc_agents.context import RunContext, create_run_context
 from doc_agents.knowledge import KBEntry, load_fixed_sections, load_formal_field_titles
-from doc_agents.llm import get_structured_output_method
+from doc_agents.llm import get_structured_output_method, invoke_structured
 from doc_agents.prompts import render_prompt
 from doc_agents.scanner import build_project_map
 from doc_agents.schemas import DescriptiveSection, Plan, ProjectMap
@@ -79,9 +79,9 @@ def create_plan(project_map: ProjectMap, context: RunContext) -> Plan:
     i zwraca odpowiedź jako obiekt Plan.
 
     Po co: cała logika plannera w jednej funkcji, z której korzysta węzeł grafu i test ręczny.
-    with_structured_output() każe modelowi odpowiedzieć zgodnie ze schematem Plan (metoda z profilu
-    agenta w config.yaml) i zamienia odpowiedź na obiekt; odpowiedź niezgodna ze schematem kończy się
-    błędem walidacji Pydantic.
+    invoke_structured() każe modelowi odpowiedzieć zgodnie ze schematem Plan (metoda z profilu
+    agenta w config.yaml) i zamienia odpowiedź na obiekt; brak odpowiedzi zgodnej ze schematem
+    kończy się błędem z przyczyną (np. odpowiedź ucięta na limicie max_tokens).
     """
     config = context.config
     fixed_sections = load_fixed_sections(config.paths.knowledge_base)
@@ -89,10 +89,12 @@ def create_plan(project_map: ProjectMap, context: RunContext) -> Plan:
     variables = build_planner_variables(project_map, context.kb_index, fixed_sections, formal_field_titles)
     system_text, user_text = render_prompt(config.paths.prompts, "planner", variables)
 
-    model_ze_schematem = context.models["planner"].with_structured_output(
-        Plan, method=get_structured_output_method(config, "planner")
+    plan = invoke_structured(
+        context.models["planner"],
+        Plan,
+        get_structured_output_method(config, "planner"),
+        [SystemMessage(content=system_text), HumanMessage(content=user_text)],
     )
-    plan = model_ze_schematem.invoke([SystemMessage(content=system_text), HumanMessage(content=user_text)])
     return plan
 
 

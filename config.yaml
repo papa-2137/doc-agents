@@ -9,7 +9,7 @@ llm:
       api_key_env: LLM_API_KEY
       base_url_env: LLM_BASE_URL
       structured_output_method: function_calling
-      params: { max_tokens: 4096 }
+      params: { max_tokens: 16000 }
     medium:
       provider: openai_compatible
       model: claude-sonnet-5-5
@@ -64,3 +64,9 @@ scan:
   # Framework instalowany jako pakiet (pip) nie leży w projekcie - widać go tylko w importach, tu go nie wpisujemy.
   # Przykład:  frameworks: { roboforge: ["roboforge_framework/*"], reframework: ["Framework/*"] }
   frameworks: {}
+
+analysis:
+  # Limit rozmiaru pliku kodu (KB) wysyłanego analitykowi w całości. Większy plik trafia do modelu
+  # tylko jako szkielet (funkcje, klasy, docstringi) z adnotacją - przewidywalny koszt i brak
+  # przekroczenia kontekstu modelu przy bardzo dużych plikach.
+  max_file_size_kb: 100

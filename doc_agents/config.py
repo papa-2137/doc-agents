@@ -54,12 +54,19 @@ class ScanConfig(BaseModel):
     frameworks: dict[str, list[str]]  # nazwa frameworku -> wzorce ścieżek względnych; {} = brak frameworku w projekcie
 
 
+class AnalysisConfig(BaseModel):
+    """Sekcja `analysis`: ograniczenia treści wysyłanej do analityków."""
+
+    max_file_size_kb: int  # plik kodu większy niż limit trafia do analityka tylko jako szkielet (outline)
+
+
 class AppConfig(BaseModel):
     """Cały config.yaml."""
 
     llm: LLMConfig
     paths: PathsConfig
     scan: ScanConfig
+    analysis: AnalysisConfig
 
 
 # --- Sprawdzenia i przetwarzanie ---

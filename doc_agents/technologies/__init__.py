@@ -1,7 +1,8 @@
 """Rejestr technologii: lista obsługiwanych technologii i wybór technologii dla projektu.
 
 Co zawiera: available_technologies() - wszystkie technologie w kolejności sprawdzania,
-oraz detect_technology(root, files) - pierwsza technologia, która rozpoznaje projekt.
+detect_technology(root, files) - pierwsza technologia, która rozpoznaje projekt,
+oraz get_technology(name) - technologia o nazwie zapisanej w mapie projektu (ProjectMap.technology).
 
 Jak dodać technologię: utwórz podklasę Technology w osobnym pliku (wzór: python.py,
 kontrakt: base.py) i dopisz jej instancję do listy w available_technologies().
@@ -46,6 +47,19 @@ def detect_technology(root: str, files: list[str]) -> Technology | None:
     """
     for technology in available_technologies():
         if technology.detect(root, files):
+            return technology
+    return None
+
+
+def get_technology(name: str) -> Technology | None:
+    """Zwraca technologię o podanej nazwie (atrybut name, np. "python"); None, gdy żadna nie pasuje
+    albo nazwa jest pusta (projekt nierozpoznany).
+
+    Po co: mapa projektu przechowuje tylko nazwę technologii (ProjectMap.technology), a analityk
+    potrzebuje obiektu technologii, żeby budować szkielety plików (outline).
+    """
+    for technology in available_technologies():
+        if name != "" and technology.name == name:
             return technology
     return None
 
