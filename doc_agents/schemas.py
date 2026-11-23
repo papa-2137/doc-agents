@@ -4,10 +4,10 @@ Co zawiera: opis kształtu danych, które jeden etap produkuje, a następny odbi
     skaner -> ProjectMap -> planner -> Plan -> analitycy -> ModuleNote -> redaktor -> recenzent -> ReviewResult
 Na tym etapie: mapa projektu (FileEntry, CodeUnit, ProjectMap), plan plannera (AnalysisTask,
 DescriptiveSection, Plan), notatka analityka (ModuleNote) oraz części dokumentu od redaktora:
-formalna (FormalField, FormalSection) i opisowa (DescriptiveChapter, DescriptivePart).
-ReviewResult dojdzie w kolejnym kroku.
+formalna (FormalField, FormalSection) i opisowa (DescriptiveChapter, DescriptivePart),
+oraz wynik recenzji (ReviewResult).
 
-Schematy odpowiedzi modelu (Plan i jego części, ModuleNote, FormalSection, DescriptivePart) mają przy polach Field(description="...") - wyjątek
+Schematy odpowiedzi modelu (Plan i jego części, ModuleNote, FormalSection, DescriptivePart, ReviewResult) mają przy polach Field(description="...") - wyjątek
 od zasady prostoty z AGENTS.md: model widzi tylko schemat JSON, a opis pola jedzie razem z nim,
 więc nie rozjedzie się z kodem (komentarze # do modelu nie trafiają). Pozostałe schematy - same typy.
 
@@ -189,6 +189,22 @@ class DescriptivePart(BaseModel):
 
     chapters: list[DescriptiveChapter] = Field(
         description="Po jednym rozdziale dla każdej pozycji z listy rozdziałów, w tej samej kolejności."
+    )
+
+
+# --- Recenzja (wynik recenzenta, schemat odpowiedzi modelu) ---
+
+
+class ReviewResult(BaseModel):
+    """Wynik recenzji dokumentu: decyzja, problemy do poprawy i sugestie."""
+
+    approved: bool = Field(description="true tylko wtedy, gdy lista issues jest pusta - dokument nie wymaga poprawek.")
+    issues: list[str] = Field(
+        description="Problemy do poprawy w kolejnej wersji; każdy zaczyna się od nazwy rozdziału lub pola "
+        "w nawiasie kwadratowym i mówi, co dokładnie poprawić."
+    )
+    suggestions: list[str] = Field(
+        description="Drobne uwagi, które nie blokują akceptacji; ten sam format co issues."
     )
 
 

@@ -21,7 +21,7 @@ llm:
     planner: small
     analyst: small
     editor: small
-    reviewer: small
+    reviewer: medium
 
 paths:
   prompts: prompts
