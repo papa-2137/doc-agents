@@ -31,7 +31,8 @@ Cały dokument składa render_document() z szablonu knowledge_base/templates/doc
 Wyniki w output/: formal.md, formal_section.json, formal_missing.txt, descriptive_part.json,
 descriptive_missing.txt i document.md (cały dokument).
 
-Na tym etapie redaktor działa bez grafu (węzeł redaktora dojdzie w kroku 32).
+create_document() wykonuje cały etap redaktora (obie części, zapis wyników, złożenie dokumentu);
+editor_node() to węzeł grafu edit, który ją wywołuje i oddaje do stanu dokument i listę braków.
 
 Test ręczny z katalogu repo - na wynikach poprzedniego uruchomienia main.py (output/ nie jest
 czyszczony; dwa wywołania modelu: część formalna i opisowa; wymaga LLM_API_KEY i LLM_BASE_URL):
@@ -43,6 +44,7 @@ import os
 
 from jinja2 import Environment, StrictUndefined
 from langchain_core.messages import HumanMessage, SystemMessage
+from langgraph.runtime import Runtime
 
 from doc_agents.config import load_config
 from doc_agents.context import RunContext, create_run_context
@@ -59,6 +61,7 @@ from doc_agents.schemas import (
     Plan,
     ProjectMap,
 )
+from doc_agents.state import DocState
 
 
 # --- Pola ze skanera ---
@@ -394,6 +397,51 @@ def render_document(knowledge_base_dir: str, project_name: str, formal_markdown:
     return dokument
 
 
+# --- Cały etap redaktora i węzeł grafu ---
+
+
+def create_document(
+    project_map: ProjectMap, plan: Plan, notes: list[ModuleNote], context: RunContext
+) -> tuple[str, list[str], list[str]]:
+    """Wykonuje cały etap redaktora: część formalna i opisowa (dwa wywołania modelu), zapis ich wyników w output/,
+    złożenie dokumentu i zapis output/document.md. Zwraca (dokument, brakujące pola formalne,
+    brakujące rozdziały wymagane).
+
+    Po co: jedna funkcja dla węzła grafu i testu ręcznego - obie ścieżki robią dokładnie to samo
+    i zostawiają te same pliki w output/.
+    """
+    run_store = context.run_store
+    formal_markdown, section, formal_missing = create_formal_part(project_map, plan, notes, context)
+    save_formal_part(run_store, formal_markdown, section, formal_missing)
+    descriptive_markdown, part, descriptive_missing = create_descriptive_part(
+        project_map, plan, notes, formal_markdown, context
+    )
+    save_descriptive_part(run_store, part, descriptive_missing)
+
+    document = render_document(
+        context.config.paths.knowledge_base, project_map.project_name, formal_markdown, descriptive_markdown
+    )
+    run_store.save_text("document.md", document)
+
+    wynik = (document, formal_missing, descriptive_missing)
+    return wynik
+
+
+def editor_node(state: DocState, runtime: Runtime[RunContext]) -> dict:
+    """Węzeł edit: tworzy dokument z mapy projektu, planu i notatek ze stanu i zwraca do stanu dokument
+    oraz listę braków (nazwy brakujących pól formalnych i tytuły brakujących rozdziałów wymaganych).
+
+    Po co: etap redaktora w grafie - uruchamia się raz, gdy wszyscy analitycy skończą. Lista braków
+    w stanie przyda się recenzentowi (krok 33).
+    """
+    document, formal_missing, descriptive_missing = create_document(
+        state["project_map"], state["plan"], state["notes"], runtime.context
+    )
+
+    aktualizacja_stanu = {"document": document, "missing": formal_missing + descriptive_missing}
+    return aktualizacja_stanu
+
+
 # --- Wczytanie wyników poprzednich etapów ---
 
 
@@ -466,17 +514,8 @@ def manual_test() -> None:
     plan = run_store.load_json("plan.json", Plan)
     notes = load_notes(run_store)
 
-    formal_markdown, section, formal_missing = create_formal_part(project_map, plan, notes, context)
-    save_formal_part(run_store, formal_markdown, section, formal_missing)
-    descriptive_markdown, part, descriptive_missing = create_descriptive_part(
-        project_map, plan, notes, formal_markdown, context
-    )
-    save_descriptive_part(run_store, part, descriptive_missing)
-
-    knowledge_base_dir = config.paths.knowledge_base
-    document = render_document(knowledge_base_dir, project_map.project_name, formal_markdown, descriptive_markdown)
-    document_path = run_store.save_text("document.md", document)
-    print_document(document, formal_missing, descriptive_missing, document_path)
+    document, formal_missing, descriptive_missing = create_document(project_map, plan, notes, context)
+    print_document(document, formal_missing, descriptive_missing, run_store.path("document.md"))
 
 
 if __name__ == "__main__":

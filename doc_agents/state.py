@@ -1,8 +1,8 @@
 """Stan grafu (DocState): dane, które węzły grafu czytają i uzupełniają w trakcie przebiegu.
 
 Co zawiera: na tym etapie ścieżkę dokumentowanego projektu (wejście grafu), mapę projektu
-(wynik węzła scan), plan (wynik węzła plan) i notatki analityków (wynik węzłów analyze).
-Kolejne kroki dopiszą tu dokument i uwagi recenzenta.
+(wynik węzła scan), plan (wynik węzła plan), notatki analityków (wynik węzłów analyze) oraz dokument
+i listę braków (wynik węzła edit). Kolejne kroki dopiszą tu uwagi recenzenta.
 
 Pole notes ma reducer operator.add (zapis Annotated[..., operator.add]): analitycy działają
 równolegle i każdy zwraca {"notes": [swoja_notatka]}. Bez reducera kolejne wyniki nadpisywałyby
@@ -36,6 +36,8 @@ class DocState(TypedDict):
     project_map: ProjectMap  # mapa projektu - wynik węzła scan
     plan: Plan  # plan pracy zespołu - wynik węzła plan (agent planner)
     notes: Annotated[list[ModuleNote], operator.add]  # notatki analityków - doklejane z równoległych węzłów analyze
+    document: str  # cały dokument w Markdown - wynik węzła edit
+    missing: list[str]  # brakujące pola formalne (nazwy) i rozdziały wymagane (tytuły) - wynik węzła edit
 
 
 class AnalystInput(TypedDict):

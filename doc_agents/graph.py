@@ -1,15 +1,18 @@
 """Graf LangGraph: kolejność etapów generowania dokumentacji.
 
 Co robi: build_graph() składa graf z węzłów i krawędzi, run_graph() uruchamia go dla projektu.
-Na tym etapie graf ma trzy węzły:
-    START -> scan -> plan -> analyze (równolegle, po jednym na zadanie z planu) -> END
+Na tym etapie graf ma pięć węzłów:
+    START -> scan -> plan -> analyze (równolegle, po jednym na zadanie z planu) -> edit -> finalize -> END
     - scan buduje mapę projektu (scanner.build_project_map), zapisuje ją do output/project_map.json
       i dopisuje do stanu,
     - plan (agent planner, doc_agents/agents/planner.py) na podstawie mapy tworzy plan pracy zespołu,
       zapisuje go do output/plan.json i dopisuje do stanu,
     - analyze (agent analityk, doc_agents/agents/analyst.py) analizuje jedną jednostkę kodu, zapisuje
-      notatkę w output/notes/ i dokleja ją do listy notes w stanie.
-Kolejne kroki dodadzą węzły redaktora i recenzenta.
+      notatkę w output/notes/ i dokleja ją do listy notes w stanie,
+    - edit (agent redaktor, doc_agents/agents/editor.py) uruchamia się raz, gdy wszyscy analitycy skończą:
+      składa część formalną i opisową w dokument (output/document.md) i oddaje do stanu dokument i braki,
+    - finalize zapisuje dokument końcowy w output/final.md.
+Kolejny krok doda recenzenta między edit a finalize (z powrotem do edit, gdy dokument wymaga poprawek).
 
 Równoległość (Send): po węźle plan funkcja dispatch_analysts() zwraca listę Send("analyze", dane) -
 po jednym na zadanie z planu. LangGraph uruchamia wtedy węzeł analyze tyle razy, ile jest zadań,
@@ -37,6 +40,7 @@ from langgraph.runtime import Runtime
 from langgraph.types import Send
 
 from doc_agents.agents.analyst import analyst_node
+from doc_agents.agents.editor import editor_node
 from doc_agents.agents.planner import planner_node
 from doc_agents.config import load_config
 from doc_agents.context import RunContext, create_run_context
@@ -61,6 +65,19 @@ def scan_node(state: DocState, runtime: Runtime[RunContext]) -> dict:
     return aktualizacja_stanu
 
 
+def finalize_node(state: DocState, runtime: Runtime[RunContext]) -> dict:
+    """Węzeł finalize: zapisuje dokument ze stanu jako output/final.md.
+
+    Po co: jedno, stałe miejsce wyniku końcowego. document.md to wersja robocza z ostatniego przebiegu
+    redaktora; po dodaniu recenzenta (krok 34) do final.md trafi tylko wersja zaakceptowana.
+    Węzeł nie zmienia stanu.
+    """
+    runtime.context.run_store.save_text("final.md", state["document"])
+
+    aktualizacja_stanu = {}
+    return aktualizacja_stanu
+
+
 def dispatch_analysts(state: DocState) -> list[Send]:
     """Zwraca listę Send("analyze", dane analityka) - po jednym na każde zadanie z planu.
 
@@ -79,8 +96,9 @@ def dispatch_analysts(state: DocState) -> list[Send]:
 
 
 def build_graph():
-    """Składa i kompiluje graf: START -> scan -> plan -> analyze (×N, równolegle) -> END,
-    ze stanem DocState i kontekstem RunContext.
+    """Składa i kompiluje graf: START -> scan -> plan -> analyze (×N, równolegle) -> edit -> finalize -> END,
+    ze stanem DocState i kontekstem RunContext. Krawędź analyze -> edit uruchamia edit raz,
+    po zakończeniu wszystkich równoległych analityków.
 
     Po co: jedno miejsce, w którym widać wszystkie etapy i ich kolejność; kolejne węzły
     dopisuje się tutaj. compile() sprawdza poprawność grafu (np. brakujące krawędzie)
@@ -90,10 +108,14 @@ def build_graph():
     graph_builder.add_node("scan", scan_node)
     graph_builder.add_node("plan", planner_node)
     graph_builder.add_node("analyze", analyst_node)
+    graph_builder.add_node("edit", editor_node)
+    graph_builder.add_node("finalize", finalize_node)
     graph_builder.add_edge(START, "scan")
     graph_builder.add_edge("scan", "plan")
     graph_builder.add_conditional_edges("plan", dispatch_analysts, ["analyze"])
-    graph_builder.add_edge("analyze", END)
+    graph_builder.add_edge("analyze", "edit")
+    graph_builder.add_edge("edit", "finalize")
+    graph_builder.add_edge("finalize", END)
 
     skompilowany_graf = graph_builder.compile()
     return skompilowany_graf
@@ -117,7 +139,8 @@ def run_graph(project_path: str, context: RunContext) -> DocState:
 
 def print_final_state(state: DocState) -> None:
     """Wypisuje stan końcowy: ścieżkę projektu, podsumowanie mapy projektu (technologia, pliki, jednostki kodu),
-    planu (liczba zadań, pliki wiedzy, rozdziały) i notatek analityków (liczba, jednostki).
+    planu (liczba zadań, pliki wiedzy, rozdziały), notatek analityków (liczba, jednostki) oraz dokumentu
+    (liczba linii i braki).
 
     Po co: przy teście ręcznym widać, że wszystkie węzły zadziałały i ich wyniki trafiły do stanu -
     w szczególności, że notatek jest tyle, ile zadań w planie.
@@ -144,6 +167,8 @@ def print_final_state(state: DocState) -> None:
     print(f"notes: {len(notes)} (zadań w planie: {len(plan.tasks)})")
     for note in notes:
         print(f"  {note.unit_name}: {len(note.process_steps)} kroków procesu")
+    print(f"document: {len(state['document'].splitlines())} linii")
+    print(f"missing: {state['missing']}")
 
 
 # --- Test ręczny ---
