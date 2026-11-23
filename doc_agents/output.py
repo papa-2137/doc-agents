@@ -84,9 +84,10 @@ class RunStore:
         return obiekt
 
 
-def create_run_store() -> RunStore:
+def create_run_store(clear: bool = True) -> RunStore:
     """Usuwa katalog output/ w katalogu repozytorium narzędzia razem z wynikami poprzedniego uruchomienia,
-    zakłada go od nowa pusty i zwraca RunStore.
+    zakłada go od nowa pusty i zwraca RunStore. Z clear=False niczego nie usuwa (tylko zakłada katalog,
+    gdy go brak) - tak testy agentów pracują na wynikach poprzedniego uruchomienia.
 
     Po co: w katalogu wyników są zawsze tylko pliki z ostatniego uruchomienia - nie zostają
     stare pliki, które mogłyby się pomylić z nowymi (np. notatka modułu usuniętego z projektu).
@@ -95,9 +96,9 @@ def create_run_store() -> RunStore:
     """
     repo_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     output_abs = os.path.join(repo_dir, "output")
-    if os.path.exists(output_abs):
+    if clear and os.path.exists(output_abs):
         shutil.rmtree(output_abs)
-    os.makedirs(output_abs)
+    os.makedirs(output_abs, exist_ok=True)
 
     magazyn_wynikow = RunStore(output_abs)
     return magazyn_wynikow

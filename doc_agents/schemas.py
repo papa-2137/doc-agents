@@ -3,10 +3,10 @@
 Co zawiera: opis kształtu danych, które jeden etap produkuje, a następny odbiera:
     skaner -> ProjectMap -> planner -> Plan -> analitycy -> ModuleNote -> redaktor -> recenzent -> ReviewResult
 Na tym etapie: mapa projektu (FileEntry, CodeUnit, ProjectMap), plan plannera (AnalysisTask,
-DescriptiveSection, Plan) i notatka analityka (ModuleNote). Schematy redaktora i ReviewResult
-dojdą w kolejnych krokach.
+DescriptiveSection, Plan), notatka analityka (ModuleNote) i część formalna redaktora
+(FormalField, FormalSection). ReviewResult dojdzie w kolejnym kroku.
 
-Schematy odpowiedzi modelu (Plan i jego części, ModuleNote) mają przy polach Field(description="...") - wyjątek
+Schematy odpowiedzi modelu (Plan i jego części, ModuleNote, FormalSection) mają przy polach Field(description="...") - wyjątek
 od zasady prostoty z AGENTS.md: model widzi tylko schemat JSON, a opis pola jedzie razem z nim,
 więc nie rozjedzie się z kodem (komentarze # do modelu nie trafiają). Pozostałe schematy - same typy.
 
@@ -146,6 +146,28 @@ class ModuleNote(BaseModel):
         description="Konkretne wskazówki dla opiekuna: co zmienić przy zmianie strony lub danych, gdzie szukać "
         "przyczyny błędu, czego nie ruszać."
     )
+
+
+# --- Część formalna (wynik redaktora, schemat odpowiedzi modelu) ---
+
+
+class FormalField(BaseModel):
+    """Jedno pole części formalnej: nazwa z formal_template.yaml i wartość.
+
+    Schemat jest ogólny - lista pól nie jest wpisana w kod, tylko wynika z szablonu.
+    """
+
+    name: str = Field(description="Identyfikator pola dokładnie jak 'name' w liście pól do wypełnienia.")
+    value: list[str] = Field(
+        description="Wartość pola jako lista tekstów: dla pola typu text jeden element (akapit), dla pola typu list "
+        "jeden element na punkt. Pusta lista, gdy brak informacji."
+    )
+
+
+class FormalSection(BaseModel):
+    """Wypełnione pola części formalnej."""
+
+    fields: list[FormalField] = Field(description="Po jednym wpisie dla każdego pola z listy pól do wypełnienia.")
 
 
 # --- Test ręczny ---

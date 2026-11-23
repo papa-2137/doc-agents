@@ -72,11 +72,21 @@ fields:
     scanner: role:config
 
   - name: sekrety
-    title: Sekrety i dostępy
+    title: Pliki z sekretami
     type: list
     required: true
     source: scanner
     scanner: role:secret
+
+  - name: dostepy
+    title: Dostępy i hasła
+    type: list
+    required: true
+    source: llm
+    instruction: >
+      Wymień konta, hasła, klucze i certyfikaty, których robot potrzebuje do działania: do czego służą
+      i skąd robot je bierze (nazwa zmiennej środowiskowej, klucz konfiguracji, plik). Nigdy nie podawaj
+      wartości. Jeśli z kodu wynika, kto je zakłada lub kiedy trzeba je odnowić, dopisz to.
 
   - name: obsluga_bledow
     title: Obsługa błędów i logi

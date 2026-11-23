@@ -11,7 +11,7 @@ przez cały przebieg. LangGraph podaje je każdemu węzłowi przez runtime.conte
 i porównywany, a modeli i połączeń nie da się sensownie zapisać.
 
 Uwaga: create_run_context() tworzy modele (potrzebne zmienne LLM_API_KEY i LLM_BASE_URL -
-bez wywoływania modelu) i czyści katalog output/.
+bez wywoływania modelu) i domyślnie czyści katalog output/ (clear_output=False go zostawia).
 
 Test ręczny z katalogu repo (tworzy kontekst i wypisuje jego zawartość):
     python -m doc_agents.context
@@ -54,15 +54,17 @@ def create_models(config: AppConfig) -> dict[str, BaseChatModel]:
     return modele_agentow
 
 
-def create_run_context(config: AppConfig) -> RunContext:
-    """Składa RunContext: czyści katalog wyników, tworzy modele agentów i wczytuje spis bazy wiedzy.
+def create_run_context(config: AppConfig, clear_output: bool = True) -> RunContext:
+    """Składa RunContext: czyści katalog wyników (z clear_output=False zostawia go bez zmian),
+    tworzy modele agentów i wczytuje spis bazy wiedzy.
 
     Po co: jedno miejsce przygotowania wszystkich zależności przebiegu - main.py i testy
-    tworzą kontekst tą funkcją i przekazują go do grafu.
+    tworzą kontekst tą funkcją i przekazują go do grafu. Testy agentów podają clear_output=False,
+    żeby pracować na wynikach poprzedniego uruchomienia bez ponownego wywoływania wcześniejszych agentów.
     """
     kontekst = RunContext(
         config=config,
-        run_store=create_run_store(),
+        run_store=create_run_store(clear_output),
         models=create_models(config),
         kb_index=load_index(config.paths.knowledge_base),
     )

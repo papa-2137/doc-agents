@@ -16,6 +16,7 @@ Szablony dokumentu (knowledge_base/templates/) nie są częścią spisu. Planner
     - load_fixed_sections() - stałe rozdziały części opisowej (tytuł i instrukcja) z descriptive_template.yaml,
     - load_formal_field_titles() - tytuły pól części formalnej z formal_template.yaml (żeby nie
       proponował rozdziałów, które je powtarzają).
+Redaktor dostaje pełny opis pól części formalnej przez load_formal_fields().
 
 Test ręczny z katalogu repo (wypisuje wpisy spisu, stałe rozdziały, pola części formalnej i treść jednego pliku,
 sprawdza blokadę ścieżki spoza bazy):
@@ -142,20 +143,32 @@ def load_fixed_sections(knowledge_base_dir: str) -> list[DescriptiveSection]:
     return stale_rozdzialy
 
 
-def load_formal_field_titles(knowledge_base_dir: str) -> list[str]:
-    """Wczytuje templates/formal_template.yaml z katalogu bazy wiedzy i zwraca tytuły pól części formalnej
+def load_formal_fields(knowledge_base_dir: str) -> list[dict]:
+    """Wczytuje templates/formal_template.yaml z katalogu bazy wiedzy i zwraca listę pól części formalnej
+    (słowniki z kluczami z YAML: name, title, type, required, source oraz scanner albo instruction)
     w kolejności z pliku.
 
-    Po co: planner musi wiedzieć, co będzie w części formalnej, żeby nie proponować rozdziałów opisowych,
-    które powtarzają te same informacje. Same tytuły wystarczą - instrukcje pól są dla redaktora.
+    Po co: jedno miejsce odczytu szablonu części formalnej - redaktor wypełnia i składa pola według niego,
+    planner bierze z niego tytuły. Pola zostają słownikami: zespół może dopisywać klucze bez zmian w kodzie.
     Argument: config.paths.knowledge_base.
     """
     template_path = os.path.join(knowledge_base_dir, "templates", "formal_template.yaml")
     with open(template_path, encoding="utf-8") as f:
         dane_szablonu = yaml.safe_load(f)
 
+    pola = dane_szablonu["fields"]
+    return pola
+
+
+def load_formal_field_titles(knowledge_base_dir: str) -> list[str]:
+    """Zwraca tytuły pól części formalnej z templates/formal_template.yaml w kolejności z pliku.
+
+    Po co: planner musi wiedzieć, co będzie w części formalnej, żeby nie proponować rozdziałów opisowych,
+    które powtarzają te same informacje. Same tytuły wystarczą - instrukcje pól są dla redaktora.
+    Argument: config.paths.knowledge_base.
+    """
     tytuly_pol = []
-    for field_data in dane_szablonu["fields"]:
+    for field_data in load_formal_fields(knowledge_base_dir):
         tytuly_pol.append(field_data["title"])
     return tytuly_pol
 
