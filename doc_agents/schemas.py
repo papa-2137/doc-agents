@@ -2,8 +2,12 @@
 
 Co zawiera: opis kształtu danych, które jeden etap produkuje, a następny odbiera:
     skaner -> ProjectMap -> planner -> Plan -> analitycy -> ModuleNote -> redaktor -> recenzent -> ReviewResult
-Na tym etapie jest tylko mapa projektu (FileEntry, CodeUnit, ProjectMap). Plan, ModuleNote
-i ReviewResult dojdą w kolejnych krokach.
+Na tym etapie: mapa projektu (FileEntry, CodeUnit, ProjectMap) i plan plannera (AnalysisTask,
+DescriptiveSection, Plan). ModuleNote i ReviewResult dojdą w kolejnych krokach.
+
+Schematy odpowiedzi modelu (Plan i jego części) mają przy polach Field(description="...") - wyjątek
+od zasady prostoty z AGENTS.md: model widzi tylko schemat JSON, a opis pola jedzie razem z nim,
+więc nie rozjedzie się z kodem (komentarze # do modelu nie trafiają). Pozostałe schematy - same typy.
 
 Po co:
     - jasna umowa między etapami - każdy wie, co dostaje i co oddaje,
@@ -12,11 +16,14 @@ Po co:
     - klasy wyników agentów przekazujemy modelowi językowemu jako schemat structured output,
     - mapa projektu zawiera ścieżki i metadane, a nie treść plików (kod czytamy z dysku dopiero przy analizie).
 
-Uruchomienie testowe z katalogu repo (składa przykładową mapę ręcznie, wypisuje JSON i sprawdza odczyt):
+Test ręczny z katalogu repo (składa ręcznie przykładową mapę i przykładowy plan, wypisuje JSON,
+sprawdza odczyt i pokazuje schemat JSON planu, który dostanie model):
     python -m doc_agents.schemas
 """
 
-from pydantic import BaseModel
+import json
+
+from pydantic import BaseModel, Field
 
 
 # --- Mapa projektu (wynik skanera) ---
@@ -53,6 +60,45 @@ class ProjectMap(BaseModel):
     code_units: list[CodeUnit]  # pliki źródłowe kodu projektu (bez frameworku)
 
 
+
+# --- Plan (wynik plannera, schemat odpowiedzi modelu) ---
+
+
+class AnalysisTask(BaseModel):
+    """Zadanie dla jednego analityka: jedna jednostka kodu do przeanalizowania."""
+
+    unit_name: str = Field(
+        description="Nazwa jednostki kodu dokładnie tak, jak w mapie projektu (code_units[].name), np. 'src/report.py'."
+    )
+    hint: str = Field(
+        description="Krótka wskazówka dla analityka: na co zwrócić uwagę w tej jednostce (np. punkt wejścia, "
+        "metody wywoływane przez framework, praca z plikami danych, obsługa błędów)."
+    )
+
+
+class DescriptiveSection(BaseModel):
+    """Rozdział części opisowej dokumentu (ten sam kształt co stałe rozdziały w descriptive_template.yaml)."""
+
+    title: str = Field(description="Tytuł rozdziału - nagłówek w dokumencie.")
+    instruction: str = Field(description="Co redaktor ma napisać w tym rozdziale - konkretnie dla tego projektu.")
+
+
+class Plan(BaseModel):
+    """Plan pracy zespołu dla dokumentowanego projektu - odpowiedź plannera."""
+
+    summary: str = Field(
+        description="2-4 zdania: czym jest projekt i jak działa, na podstawie mapy projektu, bez zgadywania treści plików."
+    )
+    tasks: list[AnalysisTask] = Field(description="Po jednym zadaniu dla każdej jednostki kodu z mapy projektu.")
+    analyst_kb_files: list[str] = Field(
+        description="Nazwy plików ze spisu bazy wiedzy potrzebnych analitykom (wspólne dla wszystkich analityków)."
+    )
+    editor_kb_files: list[str] = Field(description="Nazwy plików ze spisu bazy wiedzy potrzebnych redaktorowi.")
+    sections: list[DescriptiveSection] = Field(
+        description="Rozdziały części opisowej w kolejności w dokumencie: wszystkie stałe rozdziały (z niezmienionym "
+        "tytułem i instrukcją) oraz rozdziały dodatkowe dopasowane do tego projektu."
+    )
+
 # --- Test ręczny ---
 
 
@@ -84,25 +130,63 @@ def build_example_project_map() -> ProjectMap:
     return przykladowa_mapa
 
 
-def print_round_trip(project_map_json: str, is_equal: bool) -> None:
-    """Wypisuje mapę projektu jako JSON i wynik porównania odczytu z oryginałem.
+def build_example_plan() -> Plan:
+    """Składa ręcznie przykładowy plan dla robota testowego (dwa zadania, jeden stały i jeden dodatkowy rozdział).
 
-    Po co: czytelny wynik testu ręcznego.
+    Po co: dane do testu zapisu i odczytu planu bez wywoływania modelu. Prawdziwy plan zwróci planner (krok 27).
     """
-    print(project_map_json)
-    print(f"\nOdczyt z JSON zgodny z oryginałem: {is_equal}")
+    przykladowy_plan = Plan(
+        summary="Robot RPA w Pythonie na frameworku Roboforge: wypełnia formularze RPA Challenge danymi z Excela "
+        "i sprawdza saldo w ParaBank; wyniki zapisuje w bazie SQLite.",
+        tasks=[
+            AnalysisTask(unit_name="main.py", hint="Punkt wejścia; metody wywoływane przez framework Roboforge."),
+            AnalysisTask(unit_name="src/challange_page.py", hint="Obsługa strony RPA Challenge: selektory i kolejność pól."),
+        ],
+        analyst_kb_files=["rpa_framework.md", "python_conventions.md"],
+        editor_kb_files=["documentation_goals.md", "rpa_framework.md"],
+        sections=[
+            DescriptiveSection(title="Ścieżki procesu krok po kroku", instruction="Instrukcja ze stałego rozdziału."),
+            DescriptiveSection(title="Praca z plikiem Excel", instruction="Jak robot czyta challenge.xlsx i co się dzieje przy błędnym wierszu."),
+        ],
+    )
+    return przykladowy_plan
+
+
+def print_round_trip(title: str, model_json: str, is_equal: bool) -> None:
+    """Wypisuje obiekt jako JSON z tytułem i wynik porównania odczytu z oryginałem.
+
+    Po co: czytelny wynik testu ręcznego zapisu i odczytu.
+    """
+    print(f"=== {title} ===\n")
+    print(model_json)
+    print(f"\nOdczyt z JSON zgodny z oryginałem: {is_equal}\n")
+
+
+def print_schema(title: str, schema_json: str) -> None:
+    """Wypisuje schemat JSON z tytułem.
+
+    Po co: pokazuje, co dokładnie zobaczy model jako format odpowiedzi (pola, typy i opisy z Field).
+    """
+    print(f"=== {title} ===\n")
+    print(schema_json)
 
 
 def manual_test() -> None:
-    """Test ręczny: składa przykładową mapę projektu, zamienia ją na JSON, wczytuje z powrotem i porównuje.
+    """Test ręczny: zapis i odczyt JSON przykładowej mapy projektu i przykładowego planu oraz schemat JSON planu.
 
-    Po co: sprawdzenie, że schematy dają się zapisać do JSON i odczytać bez utraty danych -
-    tak powstaje i jest czytany project_map.json.
+    Po co: sprawdzenie, że schematy dają się zapisać i odczytać bez utraty danych (tak powstają
+    project_map.json i plan.json) i że opisy pól planu trafiają do schematu dla modelu.
     """
     project_map = build_example_project_map()
     project_map_json = project_map.model_dump_json(indent=2)
-    loaded_map = ProjectMap.model_validate_json(project_map_json)
-    print_round_trip(project_map_json, loaded_map == project_map)
+    print_round_trip("ProjectMap", project_map_json, ProjectMap.model_validate_json(project_map_json) == project_map)
+
+    plan = build_example_plan()
+    plan_json = plan.model_dump_json(indent=2)
+    print_round_trip("Plan", plan_json, Plan.model_validate_json(plan_json) == plan)
+
+    plan_schema_json = json.dumps(Plan.model_json_schema(), indent=2, ensure_ascii=False)
+    print_schema("Schemat JSON planu (format odpowiedzi modelu)", plan_schema_json)
 
 
 if __name__ == "__main__":
