@@ -428,7 +428,46 @@ class PythonTechnology(Technology):
         return importy_w_grupach
 
 
-if __name__ == "__main__":
+# --- Test ręczny ---
+
+
+def print_project_check(root: str, files: list[str], source_files: list[str], detected: bool, entrypoints: list[str]) -> None:
+    """Wypisuje wynik sprawdzenia projektu: liczbę plików, detect, pliki źródłowe i punkty wejścia.
+
+    Po co: czytelny wynik testu ręcznego w trybie projektu.
+    """
+    print(f"Projekt: {os.path.abspath(root)}")
+    print(f"Plików (po regułach skanera): {len(files)}")
+    print(f"detect:           {detected}")
+    print(f"Pliki źródłowe:   {len(source_files)} - {', '.join(source_files)}")
+    print(f"find_entrypoints: {entrypoints}")
+
+
+def print_file_check(root: str, path: str, outline_text: str, imports: dict) -> None:
+    """Wypisuje szkielet pliku i jego importy w trzech grupach.
+
+    Po co: czytelny wynik testu ręcznego w trybie pliku.
+    """
+    print(f"Plik: {os.path.join(os.path.abspath(root), path)}")
+    print("\n=== Szkielet ===\n")
+    print(outline_text)
+    print("\n=== Importy ===\n")
+    for group, modules in imports.items():
+        opis_modulow = "(brak)"
+        if modules:
+            opis_modulow = ", ".join(modules)
+        print(f"{group}: {opis_modulow}")
+
+
+def manual_test() -> None:
+    """Test ręczny w dwóch trybach. Z jednym argumentem (katalog projektu): detect, pliki źródłowe
+    i punkty wejścia. Z dwoma (katalog, ścieżka pliku) albo bez argumentów (plik base.py tego repo):
+    szkielet i importy pliku.
+
+    Po co: sprawdzenie analizy Pythona na prawdziwym projekcie bez uruchamiania całego narzędzia.
+    Config i skaner importujemy tu, a nie na górze pliku - technologia nie zależy od skanera,
+    potrzebuje go tylko ten test.
+    """
     from doc_agents.config import load_config
     from doc_agents.scanner import list_files
 
@@ -439,23 +478,19 @@ if __name__ == "__main__":
         repo_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
         config = load_config(os.path.join(repo_dir, "config.yaml"))
         files = list_files(root, config.scan)
-        source_files = [path for path in files if technology.is_source(path)]
-        print(f"Projekt: {os.path.abspath(root)}")
-        print(f"Plików (po regułach skanera): {len(files)}")
-        print(f"detect:           {technology.detect(root, files)}")
-        print(f"Pliki źródłowe:   {len(source_files)} - {', '.join(sorted(source_files))}")
-        print(f"find_entrypoints: {technology.find_entrypoints(root, files)}")
+        source_files = []
+        for path in files:
+            if technology.is_source(path):
+                source_files.append(path)
+        print_project_check(root, files, source_files, technology.detect(root, files), technology.find_entrypoints(root, files))
     else:
+        root = os.getcwd()
+        path = "doc_agents/technologies/base.py"
         if len(sys.argv) == 3:
-            root, path = sys.argv[1], sys.argv[2]
-        else:
-            root, path = os.getcwd(), os.path.join("doc_agents", "technologies", "base.py")
+            root = sys.argv[1]
+            path = sys.argv[2]
+        print_file_check(root, path, technology.outline(root, path), technology.imports(root, path))
 
-        print(f"Plik: {os.path.join(os.path.abspath(root), path)}")
 
-        print("\n=== Szkielet ===\n")
-        print(technology.outline(root, path))
-
-        print("\n=== Importy ===\n")
-        for group, modules in technology.imports(root, path).items():
-            print(f"{group}: {', '.join(modules) if modules else '(brak)'}")
+if __name__ == "__main__":
+    manual_test()

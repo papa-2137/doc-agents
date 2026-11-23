@@ -17,11 +17,12 @@ Uruchomienie testowe z katalogu repo (jedno krótkie wywołanie modelu agenta `p
 """
 
 import os
+import time
 
 from langchain_core.language_models import BaseChatModel
 from langchain_openai import ChatOpenAI
 
-from doc_agents.config import AppConfig, LLMProfile
+from doc_agents.config import AppConfig, LLMProfile, load_config
 
 
 # --- Zmienne środowiskowe ---
@@ -92,17 +93,43 @@ def get_model_for_agent(config: AppConfig, agent: str) -> BaseChatModel:
     return model
 
 
-if __name__ == "__main__":
-    import time
+# --- Test ręczny ---
 
-    from doc_agents.config import load_config
 
-    config = load_config("config.yaml")
-    model = get_model_for_agent(config, "planner")
-    print(f"Model: {model.model_name}")
+def ask_test_question(model: BaseChatModel) -> tuple[str, float, dict]:
+    """Wysyła do modelu krótkie polecenie „Powiedz: test” i zwraca (odpowiedź, czas w sekundach, zużycie tokenów).
 
+    Po co: najprostsze sprawdzenie, że klucz, adres i nazwa modelu z configu działają.
+    """
     start = time.time()
     response = model.invoke("Powiedz: test")
-    print(f"Odpowiedź: {response.content}")
-    print(f"Czas: {time.time() - start:.1f} s")
-    print(f"Tokeny: {response.usage_metadata}")
+    czas_s = time.time() - start
+    wynik_wywolania = (response.content, czas_s, response.usage_metadata)
+    return wynik_wywolania
+
+
+def print_test_answer(model_name: str, answer: str, seconds: float, usage: dict) -> None:
+    """Wypisuje nazwę modelu, odpowiedź, czas i zużycie tokenów.
+
+    Po co: czytelny wynik testu ręcznego połączenia z modelem.
+    """
+    print(f"Model: {model_name}")
+    print(f"Odpowiedź: {answer}")
+    print(f"Czas: {seconds:.1f} s")
+    print(f"Tokeny: {usage}")
+
+
+def manual_test() -> None:
+    """Test ręczny: tworzy model agenta planner z configu, wysyła jedno krótkie polecenie i wypisuje wynik.
+
+    Po co: sprawdzenie dostępu do modelu (zmienne środowiskowe, profil, endpoint) bez uruchamiania całego narzędzia.
+    """
+    repo_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    config = load_config(os.path.join(repo_dir, "config.yaml"))
+    model = get_model_for_agent(config, "planner")
+    answer, seconds, usage = ask_test_question(model)
+    print_test_answer(model.model_name, answer, seconds, usage)
+
+
+if __name__ == "__main__":
+    manual_test()

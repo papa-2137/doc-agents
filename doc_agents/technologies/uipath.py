@@ -11,6 +11,7 @@ Jak zaimplementować:
     2. Wypełnij metody poniżej - przy każdej jest lista tego, co z projektu UiPath trzeba uchwycić.
     3. Usuń z detect() stałe `return False`.
     4. Sprawdź: python -m doc_agents.technologies.uipath <katalog projektu UiPath>
+       (test ręczny wywołuje każdą metodę i pokazuje wynik albo NotImplementedError)
 
 Zasady wspólne z resztą projektu (AGENTS.md):
     - kod projektu tylko czytamy i parsujemy, nigdy nie uruchamiamy,
@@ -34,6 +35,9 @@ Czym jest projekt UiPath (dla kontekstu):
     - .objects/ - Object Repository (biblioteka elementów UI), .local/, .settings/, .screenshots/,
       .tmh - pliki pomocnicze Studio; zwykle nie są kodem do analizy (skaner może je ignorować).
 """
+
+import os
+import sys
 
 from doc_agents.technologies.base import Technology
 
@@ -138,11 +142,58 @@ class UiPathTechnology(Technology):
         raise NotImplementedError("UiPath: imports() do implementacji - opis w docstringu")
 
 
-if __name__ == "__main__":
-    technology = UiPathTechnology()
-    print(f"name:   {technology.name}")
-    print(f"detect: {technology.detect('.', ['project.json', 'Main.xaml'])}  (zawsze False do czasu implementacji)")
+# --- Test ręczny ---
+
+
+def call_method(method, *args):
+    """Wywołuje metodę technologii i zwraca jej wynik albo tekst „NotImplementedError: ...”, gdy nie jest zaimplementowana.
+
+    Po co: test ręczny pokazuje stan każdej metody, a niezaimplementowana metoda nie przerywa testu.
+    Przydaje się autorowi implementacji - widać, które metody już działają.
+    """
     try:
-        technology.outline(".", "Main.xaml")
-    except NotImplementedError as e:
-        print(f"outline: NotImplementedError: {e}")
+        wynik = method(*args)
+    except NotImplementedError as blad:
+        wynik = f"NotImplementedError: {blad}"
+    return wynik
+
+
+def print_uipath_check(results: dict) -> None:
+    """Wypisuje wyniki (albo błędy) metod technologii UiPath.
+
+    Po co: czytelny wynik testu ręcznego.
+    """
+    for method_name, result in results.items():
+        print(f"{method_name + ':':<18}{result}")
+
+
+def manual_test() -> None:
+    """Test ręczny: wywołuje metody UiPathTechnology na projekcie z argumentu (domyślnie bieżący katalog)
+    i wypisuje wynik albo NotImplementedError każdej z nich.
+
+    Po co: sprawdzenie implementacji UiPatha w trakcie pracy nad nią; dziś pokazuje, że klasa jest pusta.
+    Listę plików bierzemy ze skanera (importowany tylko tutaj - technologia nie zależy od skanera).
+    """
+    from doc_agents.config import load_config
+    from doc_agents.scanner import list_files
+
+    root = os.getcwd()
+    if len(sys.argv) > 1:
+        root = sys.argv[1]
+    repo_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    config = load_config(os.path.join(repo_dir, "config.yaml"))
+    files = list_files(root, config.scan)
+
+    technology = UiPathTechnology()
+    results = {
+        "name": technology.name,
+        "detect": call_method(technology.detect, root, files),
+        "find_entrypoints": call_method(technology.find_entrypoints, root, files),
+        "outline": call_method(technology.outline, root, "Main.xaml"),
+        "imports": call_method(technology.imports, root, "Main.xaml"),
+    }
+    print_uipath_check(results)
+
+
+if __name__ == "__main__":
+    manual_test()

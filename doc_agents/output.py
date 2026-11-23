@@ -113,10 +113,10 @@ def print_round_trip(saved_path: str, is_equal: bool) -> None:
     print(f"Odczyt z pliku zgodny z oryginałem: {is_equal}")
 
 
-# --- Uruchomienie ---
+# --- Test ręczny ---
 
 
-def main() -> None:
+def manual_test() -> None:
     """Uruchomienie testowe: buduje mapę projektu z argumentu, zapisuje ją jako project_map.json
     w wyczyszczonym katalogu output/, wczytuje z powrotem i porównuje z oryginałem.
 
@@ -137,4 +137,4 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    main()
+    manual_test()

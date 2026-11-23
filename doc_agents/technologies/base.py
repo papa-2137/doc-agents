@@ -109,65 +109,114 @@ class Technology:
         raise NotImplementedError(f"{type(self).__name__}.imports() - do implementacji")
 
 
-if __name__ == "__main__":
+# --- Test ręczny ---
 
-    class DemoTechnology(Technology):
-        """Minimalna podklasa tylko do testu: 'kodem' są pliki .demo."""
 
-        name = "demo"
+class DemoTechnology(Technology):
+    """Minimalna podklasa tylko do testu ręcznego: 'kodem' są pliki .demo."""
 
-        def detect(self, root, files):
-            """Uznaje projekt za 'demo', gdy jest w nim choć jeden plik .demo.
+    name = "demo"
 
-            Po co: pokazuje w teście, jak podklasa realizuje kontrakt detect() - bez prawdziwej technologii.
-            """
-            czy_sa_pliki_demo = any(f.endswith(".demo") for f in files)
-            return czy_sa_pliki_demo
+    def detect(self, root, files):
+        """Uznaje projekt za 'demo', gdy jest w nim choć jeden plik .demo.
 
-        def is_source(self, path):
-            """Traktuje jako kod tylko pliki .demo.
+        Po co: pokazuje w teście, jak podklasa realizuje kontrakt detect() - bez prawdziwej technologii.
+        """
+        czy_sa_pliki_demo = False
+        for path in files:
+            if path.endswith(".demo"):
+                czy_sa_pliki_demo = True
+                break
+        return czy_sa_pliki_demo
 
-            Po co: pokazuje w teście, jak podklasa odróżnia kod od pozostałych plików projektu.
-            """
-            czy_plik_demo = path.endswith(".demo")
-            return czy_plik_demo
+    def is_source(self, path):
+        """Traktuje jako kod tylko pliki .demo.
 
-        def find_entrypoints(self, root, files):
-            """Zwraca plik start.demo jako jedyny punkt wejścia, jeśli istnieje.
+        Po co: pokazuje w teście, jak podklasa odróżnia kod od pozostałych plików projektu.
+        """
+        czy_plik_demo = path.endswith(".demo")
+        return czy_plik_demo
 
-            Po co: pokazuje w teście format wyniku find_entrypoints() - lista ścieżek względnych.
-            """
-            punkty_wejscia = [f for f in files if f == "start.demo"]
-            return punkty_wejscia
+    def find_entrypoints(self, root, files):
+        """Zwraca plik start.demo jako jedyny punkt wejścia, jeśli istnieje.
 
-        def outline(self, root, path):
-            """Zwraca stały, przykładowy szkielet pliku.
+        Po co: pokazuje w teście format wyniku find_entrypoints() - lista ścieżek względnych.
+        """
+        punkty_wejscia = []
+        if "start.demo" in files:
+            punkty_wejscia.append("start.demo")
+        return punkty_wejscia
 
-            Po co: pokazuje w teście, że outline() zwraca zwykły tekst dla modelu językowego.
-            """
-            szkielet = f"plik {path}: (demo - brak struktury)"
-            return szkielet
+    def outline(self, root, path):
+        """Zwraca stały, przykładowy szkielet pliku.
 
-        def imports(self, root, path):
-            """Zwraca stałe, przykładowe zależności w trzech grupach.
+        Po co: pokazuje w teście, że outline() zwraca zwykły tekst dla modelu językowego.
+        """
+        szkielet = f"plik {path}: (demo - brak struktury)"
+        return szkielet
 
-            Po co: pokazuje w teście wymagany kształt wyniku imports() - słownik z kluczami internal, external, stdlib.
-            """
-            zaleznosci = {"internal": ["helpers.demo"], "external": ["biblioteka_x"], "stdlib": []}
-            return zaleznosci
+    def imports(self, root, path):
+        """Zwraca stałe, przykładowe zależności w trzech grupach.
 
-    root = r"C:\projekt_demo"
-    files = ["start.demo", "helpers.demo", "config.yml", "dane.xlsx"]
-    demo = DemoTechnology()
+        Po co: pokazuje w teście wymagany kształt wyniku imports() - słownik z kluczami internal, external, stdlib.
+        """
+        zaleznosci = {"internal": ["helpers.demo"], "external": ["biblioteka_x"], "stdlib": []}
+        return zaleznosci
 
-    print(f"name:             {demo.name}")
-    print(f"detect:           {demo.detect(root, files)}")
-    print(f"is_source:        {[(f, demo.is_source(f)) for f in files]}")
-    print(f"find_entrypoints: {demo.find_entrypoints(root, files)}")
-    print(f"outline:          {demo.outline(root, 'start.demo')}")
-    print(f"imports:          {demo.imports(root, 'start.demo')}")
 
+def run_demo(technology: Technology, root: str, files: list[str]) -> dict:
+    """Wywołuje wszystkie metody kontraktu na podanej technologii i zwraca wyniki w słowniku (nazwa metody -> wynik).
+
+    Po co: zbiera wyniki do wypisania; ten sam przebieg pokazuje autorowi nowej technologii, czego oczekuje reszta narzędzia.
+    """
+    pliki_zrodlowe = []
+    for path in files:
+        pliki_zrodlowe.append((path, technology.is_source(path)))
+    wyniki = {
+        "name": technology.name,
+        "detect": technology.detect(root, files),
+        "is_source": pliki_zrodlowe,
+        "find_entrypoints": technology.find_entrypoints(root, files),
+        "outline": technology.outline(root, "start.demo"),
+        "imports": technology.imports(root, "start.demo"),
+    }
+    return wyniki
+
+
+def base_class_error(root: str, files: list[str]) -> str:
+    """Wywołuje detect() na samej klasie bazowej i zwraca komunikat NotImplementedError.
+
+    Po co: pokazuje w teście, że klasa bazowa jest tylko kontraktem - metody trzeba zaimplementować w podklasie.
+    """
+    komunikat_bledu = ""
     try:
         Technology().detect(root, files)
-    except NotImplementedError as e:
-        print(f"\nKlasa bazowa bez implementacji: NotImplementedError: {e}")
+    except NotImplementedError as blad:
+        komunikat_bledu = str(blad)
+    return komunikat_bledu
+
+
+def print_demo(results: dict, error_message: str) -> None:
+    """Wypisuje wyniki metod podklasy demo i komunikat błędu klasy bazowej.
+
+    Po co: czytelny wynik testu ręcznego.
+    """
+    for method_name, result in results.items():
+        print(f"{method_name + ':':<18}{result}")
+    print(f"\nKlasa bazowa bez implementacji: NotImplementedError: {error_message}")
+
+
+def manual_test() -> None:
+    """Test ręczny: uruchamia metody kontraktu na podklasie demo i pokazuje błąd klasy bazowej.
+
+    Po co: sprawdzenie kontraktu Technology na minimalnym przykładzie, bez prawdziwej technologii.
+    """
+    root = r"C:\projekt_demo"
+    files = ["start.demo", "helpers.demo", "config.yml", "dane.xlsx"]
+    results = run_demo(DemoTechnology(), root, files)
+    error_message = base_class_error(root, files)
+    print_demo(results, error_message)
+
+
+if __name__ == "__main__":
+    manual_test()

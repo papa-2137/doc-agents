@@ -325,7 +325,7 @@ def print_map_json(project_map: ProjectMap) -> None:
     print(project_map.model_dump_json(indent=2))
 
 
-# --- Uruchomienie ---
+# --- Test ręczny ---
 
 
 def parse_args() -> str:
@@ -340,7 +340,7 @@ def parse_args() -> str:
     return katalog_projektu
 
 
-def main() -> None:
+def manual_test() -> None:
     """Uruchomienie testowe: wczytuje config.yaml z katalogu repo, buduje mapę projektu z argumentu
     i wypisuje tabelę plików, punkty wejścia, jednostki kodu oraz mapę jako JSON.
 
@@ -358,4 +358,4 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    main()
+    manual_test()

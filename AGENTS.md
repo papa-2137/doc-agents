@@ -68,8 +68,11 @@ Przepływ grafu: `scan → planner → analyst × N (Send) → editor → review
 ## Styl kodu
 
 1. **Oddzielaj logikę od wyświetlania.** Funkcje liczące i testujące zwracają wartości i niczego nie wypisują. Wypisywanie (`print`) jest wyłącznie w osobnych funkcjach wyświetlających (np. `print_results`), które dostają gotowe dane i tylko je formatują.
-2. **`main()` jako spis treści.** `main()` wywołuje kolejne kroki po kolei (argumenty → dane → logika → wyświetlenie) i nie zawiera szczegółów ani długich bloków `print`.
-3. **Plik podzielony na sekcje** z komentarzami-nagłówkami, np. `# --- Logika ---`, `# --- Wyświetlanie ---`, `# --- Uruchomienie ---`, w kolejności od elementów podstawowych do `main()`.
+2. **`main()` jako spis treści.** `main()` wywołuje kolejne kroki po kolei (argumenty → dane → logika → wyświetlenie) i nie zawiera szczegółów ani długich bloków `print`. Nazwy `main()` i `manual_test()`:
+   - `main()` - tylko gdy moduł ma być uruchamiany w programie i z całego modułu z zewnątrz wołana jest wyłącznie ta funkcja, a pozostałe funkcje modułu służą tylko jej (np. `main.py`, skrypty w `scripts/`). Moduł, którego funkcje woła reszta narzędzia (np. `scanner.py`, `prompts.py`), nie ma `main()`.
+   - `manual_test()` - każda funkcja do testowania modułu (a każdy moduł powinien taką mieć): test ręczny do obejrzenia wyniku, nie test automatyczny. Wywoływana w bloku `if __name__ == "__main__":`, kod testu nigdy nie leży wprost w tym bloku. Moduł z `main()` nie potrzebuje osobnego `manual_test()` - jego uruchomienie jest testem.
+   - Obie funkcje są „spisem treści”.
+3. **Plik podzielony na sekcje** z komentarzami-nagłówkami, np. `# --- Logika ---`, `# --- Wyświetlanie ---`, `# --- Uruchomienie ---` (w modułach: `# --- Test ręczny ---`), w kolejności od elementów podstawowych do `main()` / `manual_test()`.
 4. **Wynik przed `return` przypisuj do zmiennej o opisowej nazwie**, zamiast zwracać długie wyrażenie lub f-string wprost:
    ```python
    opis_danych_ze_schematu = f"{capital.capital}, {capital.population_millions} mln"
@@ -77,7 +80,7 @@ Przepływ grafu: `scan → planner → analyst × N (Send) → editor → review
    ```
 5. **Bez stałych na poziomie modułu, jeśli używa ich tylko jedna funkcja.** Taka wartość (słownik, domyślna ścieżka itp.) jest zmienną lokalną tej funkcji - nie da się jej wtedy przypadkiem zmienić ani zaimportować z zewnątrz.
 6. **Docstring modułu dla innego programisty:** na początku pliku krótko co moduł robi, po co, jak go uruchomić i jak czytać wynik.
-7. **Docstring w każdej funkcji i metodzie: CO robi i PO CO.** Każda funkcja i metoda, którą tworzymy (także pomocnicza, testowa i `main()`), ma docstring w stałym formacie:
+7. **Docstring w każdej funkcji i metodzie: CO robi i PO CO.** Każda funkcja i metoda, którą tworzymy (także pomocnicza, `main()` i `manual_test()`), ma docstring w stałym formacie:
    - **pierwszy akapit - CO robi**: jedno-dwa zdania, bez powtarzania nazwy funkcji (ten akapit trafia też do szkieletu pliku, więc ma być samodzielnie zrozumiały),
    - **drugi akapit zaczyna się od `Po co:`** - jaką rolę funkcja pełni w narzędziu, kto korzysta z wyniku, jaki problem rozwiązuje,
    - dalej, gdy potrzebne: argumenty i wynik (jeśli nie są oczywiste z nazw i typów) oraz nietypowe zachowania (np. co zwraca przy błędzie).

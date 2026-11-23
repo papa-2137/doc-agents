@@ -110,6 +110,27 @@ def load_config(path: str) -> AppConfig:
     return config
 
 
-if __name__ == "__main__":
-    config = load_config("config.yaml")
+# --- Test ręczny ---
+
+
+def print_config(config: AppConfig) -> None:
+    """Wypisuje wczytany config jako JSON z wcięciami.
+
+    Po co: przy teście ręcznym widać dokładnie to, co dostaje reszta narzędzia (w tym ścieżki bezwzględne).
+    """
     print(config.model_dump_json(indent=2))
+
+
+def manual_test() -> None:
+    """Test ręczny: wczytuje config.yaml z katalogu repo i wypisuje go jako JSON.
+
+    Po co: szybkie sprawdzenie, czy config się wczytuje, agenci wskazują istniejące profile,
+    a ścieżki prowadzą do właściwych katalogów.
+    """
+    repo_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    config = load_config(os.path.join(repo_dir, "config.yaml"))
+    print_config(config)
+
+
+if __name__ == "__main__":
+    manual_test()

@@ -6,8 +6,8 @@ oraz detect_technology(root, files) - pierwsza technologia, która rozpoznaje pr
 Jak dodać technologię: utwórz podklasę Technology w osobnym pliku (wzór: python.py,
 kontrakt: base.py) i dopisz jej instancję do listy w available_technologies().
 
-Uruchomienie testowe z katalogu repo (moduł __init__ nie uruchamia się przez -m, dlatego python -c):
-    python -c "from doc_agents.technologies import detect_technology; print(detect_technology('.', ['main.py']).name)"
+Test ręczny z katalogu repo (moduł __init__ nie uruchamia się przez -m, dlatego python -c):
+    python -c "from doc_agents.technologies import manual_test; manual_test()"
 """
 
 from doc_agents.technologies.base import Technology
@@ -48,3 +48,20 @@ def detect_technology(root: str, files: list[str]) -> Technology | None:
         if technology.detect(root, files):
             return technology
     return None
+
+
+# --- Test ręczny ---
+
+
+def manual_test() -> None:
+    """Test ręczny: sprawdza wybór technologii dla kilku przykładowych list plików i wypisuje wynik.
+
+    Po co: szybkie sprawdzenie rejestru (kolejność technologii, None dla nierozpoznanego projektu).
+    """
+    przyklady = [["main.py", "src/report.py"], ["project.json", "Main.xaml"], ["dane.xlsx"]]
+    for files in przyklady:
+        technology = detect_technology(".", files)
+        nazwa_technologii = "None"
+        if technology is not None:
+            nazwa_technologii = technology.name
+        print(f"{files} -> {nazwa_technologii}")
