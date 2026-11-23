@@ -1,7 +1,8 @@
 """Stan grafu (DocState): dane, które węzły grafu czytają i uzupełniają w trakcie przebiegu.
 
-Co zawiera: na tym etapie ścieżkę dokumentowanego projektu (wejście grafu) i mapę projektu
-(wynik węzła scan). Kolejne kroki dopiszą tu plan, notatki analityków, dokument i uwagi recenzenta.
+Co zawiera: na tym etapie ścieżkę dokumentowanego projektu (wejście grafu), mapę projektu
+(wynik węzła scan) i plan (wynik węzła plan). Kolejne kroki dopiszą tu notatki analityków,
+dokument i uwagi recenzenta.
 
 Jak działa stan w LangGraph: graf zaczyna od słownika podanego w invoke() (tu: tylko project_path).
 Każdy węzeł zwraca słownik TYLKO z polami, które zmienia (częściowa aktualizacja), a LangGraph
@@ -17,7 +18,7 @@ Moduł zawiera tylko opis typu - nie ma czego testować osobno; stan sprawdza te
 
 from typing import TypedDict
 
-from doc_agents.schemas import ProjectMap
+from doc_agents.schemas import Plan, ProjectMap
 
 
 class DocState(TypedDict):
@@ -25,3 +26,4 @@ class DocState(TypedDict):
 
     project_path: str  # ścieżka bezwzględna dokumentowanego projektu (wejście grafu)
     project_map: ProjectMap  # mapa projektu - wynik węzła scan
+    plan: Plan  # plan pracy zespołu - wynik węzła plan (agent planner)

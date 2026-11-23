@@ -12,9 +12,13 @@ Format index.md (zwykły tekst, łatwy do dopisywania): blok na plik, bloki oddz
     Tagi: tag1, tag2
 Blok bez linii „Kiedy użyć:” (np. nagłówek i instrukcja na początku pliku) jest pomijany.
 
-Szablony dokumentu (knowledge_base/templates/) nie są częścią spisu - wczytują je redaktor i recenzent.
+Szablony dokumentu (knowledge_base/templates/) nie są częścią spisu. Planner dostaje z nich:
+    - load_fixed_sections() - stałe rozdziały części opisowej (tytuł i instrukcja) z descriptive_template.yaml,
+    - load_formal_field_titles() - tytuły pól części formalnej z formal_template.yaml (żeby nie
+      proponował rozdziałów, które je powtarzają).
 
-Test ręczny z katalogu repo (wypisuje wpisy spisu i treść jednego pliku, sprawdza blokadę ścieżki spoza bazy):
+Test ręczny z katalogu repo (wypisuje wpisy spisu, stałe rozdziały, pola części formalnej i treść jednego pliku,
+sprawdza blokadę ścieżki spoza bazy):
     python -m doc_agents.knowledge
     python -m doc_agents.knowledge <nazwa pliku wiedzy>
 """
@@ -22,9 +26,11 @@ Test ręczny z katalogu repo (wypisuje wpisy spisu i treść jednego pliku, spra
 import os
 import sys
 
+import yaml
 from pydantic import BaseModel
 
 from doc_agents.config import load_config
+from doc_agents.schemas import DescriptiveSection
 
 
 # --- Spis bazy wiedzy ---
@@ -113,6 +119,47 @@ def read_kb_file(knowledge_base_dir: str, filename: str) -> str:
     return tresc_pliku
 
 
+# --- Szablony dokumentu ---
+
+
+def load_fixed_sections(knowledge_base_dir: str) -> list[DescriptiveSection]:
+    """Wczytuje templates/descriptive_template.yaml z katalogu bazy wiedzy i zwraca stałe rozdziały
+    (tytuł i instrukcja) w kolejności z pliku.
+
+    Po co: stałe rozdziały konfiguruje zespół w YAML, a planner musi je dostać, żeby wpisać je do planu.
+    Pole required z YAML nie jest tu zwracane - planner dostaje wszystkie rozdziały; wymagane sprawdzi
+    recenzent. Argument: config.paths.knowledge_base.
+    """
+    template_path = os.path.join(knowledge_base_dir, "templates", "descriptive_template.yaml")
+    with open(template_path, encoding="utf-8") as f:
+        dane_szablonu = yaml.safe_load(f)
+
+    stale_rozdzialy = []
+    for section_data in dane_szablonu["sections"]:
+        stale_rozdzialy.append(
+            DescriptiveSection(title=section_data["title"], instruction=section_data["instruction"].strip())
+        )
+    return stale_rozdzialy
+
+
+def load_formal_field_titles(knowledge_base_dir: str) -> list[str]:
+    """Wczytuje templates/formal_template.yaml z katalogu bazy wiedzy i zwraca tytuły pól części formalnej
+    w kolejności z pliku.
+
+    Po co: planner musi wiedzieć, co będzie w części formalnej, żeby nie proponować rozdziałów opisowych,
+    które powtarzają te same informacje. Same tytuły wystarczą - instrukcje pól są dla redaktora.
+    Argument: config.paths.knowledge_base.
+    """
+    template_path = os.path.join(knowledge_base_dir, "templates", "formal_template.yaml")
+    with open(template_path, encoding="utf-8") as f:
+        dane_szablonu = yaml.safe_load(f)
+
+    tytuly_pol = []
+    for field_data in dane_szablonu["fields"]:
+        tytuly_pol.append(field_data["title"])
+    return tytuly_pol
+
+
 # --- Wyświetlanie ---
 
 
@@ -126,6 +173,27 @@ def print_entries(entries: list[KBEntry]) -> None:
         print(entry.filename)
         print(f"  Kiedy użyć: {entry.when_to_use}")
         print(f"  Tagi: {', '.join(entry.tags)}")
+
+
+def print_fixed_sections(sections: list[DescriptiveSection]) -> None:
+    """Wypisuje stałe rozdziały części opisowej: tytuł i instrukcję.
+
+    Po co: przy teście ręcznym widać, czy descriptive_template.yaml został poprawnie odczytany.
+    """
+    print(f"\n=== Stałe rozdziały części opisowej: {len(sections)} ===\n")
+    for section in sections:
+        print(section.title)
+        print(f"  {section.instruction}")
+
+
+def print_formal_field_titles(titles: list[str]) -> None:
+    """Wypisuje tytuły pól części formalnej.
+
+    Po co: przy teście ręcznym widać, czy formal_template.yaml został poprawnie odczytany.
+    """
+    print(f"\n=== Pola części formalnej: {len(titles)} ===\n")
+    for title in titles:
+        print(title)
 
 
 def print_file(filename: str, content: str) -> None:
@@ -150,7 +218,8 @@ def print_blocked_path(error_message: str) -> None:
 
 
 def manual_test() -> None:
-    """Test ręczny: wypisuje spis bazy wiedzy, treść pliku z argumentu (domyślnie pierwszego ze spisu)
+    """Test ręczny: wypisuje spis bazy wiedzy, stałe rozdziały części opisowej, tytuły pól części formalnej,
+    treść pliku z argumentu (domyślnie pierwszego ze spisu)
     i próbuje odczytać plik spoza bazy (../../config.yaml), co ma się skończyć błędem.
 
     Po co: sprawdzenie parsera index.md i bezpiecznego odczytu na prawdziwej bazie wiedzy.
@@ -161,6 +230,8 @@ def manual_test() -> None:
 
     entries = load_index(knowledge_base_dir)
     print_entries(entries)
+    print_fixed_sections(load_fixed_sections(knowledge_base_dir))
+    print_formal_field_titles(load_formal_field_titles(knowledge_base_dir))
 
     filename = entries[0].filename
     if len(sys.argv) > 1:

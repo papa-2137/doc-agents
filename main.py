@@ -2,9 +2,9 @@
 
 Co robi: wczytuje argumenty i config.yaml, przygotowuje kontekst uruchomienia (RunContext)
 i uruchamia graf LangGraph (doc_agents/graph.py), a na końcu wypisuje podsumowanie ze stanu
-końcowego grafu. Na tym etapie graf tylko skanuje projekt (bez modelu językowego) i zapisuje
-mapę do output/project_map.json; kolejne etapy (agenci) dochodzą jako węzły grafu, bez zmian
-w tym pliku.
+końcowego grafu. Na tym etapie graf skanuje projekt (bez modelu językowego, wynik:
+output/project_map.json) i tworzy plan pracy zespołu (agent planner, wynik: output/plan.json);
+kolejne etapy (agenci) dochodzą jako węzły grafu.
 
 Uruchomienie z katalogu repo:
     python main.py --project <ścieżka do projektu>
@@ -21,18 +21,18 @@ import os
 from doc_agents.config import load_config
 from doc_agents.context import create_run_context
 from doc_agents.graph import run_graph
-from doc_agents.schemas import ProjectMap
+from doc_agents.schemas import Plan, ProjectMap
 
 
 # --- Wyświetlanie ---
 
 
-def print_summary(config_path: str, project_map: ProjectMap, map_path: str) -> None:
-    """Wypisuje podsumowanie skanu: plik configu, projekt, technologię, liczbę plików, punkty wejścia,
-    jednostki kodu do analizy i ścieżkę zapisanej mapy projektu.
+def print_summary(config_path: str, project_map: ProjectMap, map_path: str, plan: Plan, plan_path: str) -> None:
+    """Wypisuje podsumowanie przebiegu: plik configu, projekt, technologię, liczbę plików, punkty wejścia,
+    jednostki kodu do analizy, ścieżkę mapy projektu oraz skrót planu (zadania, rozdziały) i ścieżkę planu.
 
     Po co: na obecnym etapie to widoczny efekt uruchomienia main.py - od razu widać, czy projekt
-    został rozpoznany i co trafi do analizy, a szczegóły są w zapisanym project_map.json.
+    został rozpoznany i jak planner zaplanował pracę, a szczegóły są w project_map.json i plan.json.
     """
     technology_name = "(nie rozpoznano)"
     if project_map.technology != "":
@@ -50,6 +50,10 @@ def print_summary(config_path: str, project_map: ProjectMap, map_path: str) -> N
     for unit in project_map.code_units:
         print(f"    {unit.name}")
     print(f"  mapa projektu: {map_path}")
+    print(f"  plan: {len(plan.tasks)} zadań analityków, {len(plan.sections)} rozdziałów części opisowej")
+    for section in plan.sections:
+        print(f"    {section.title}")
+    print(f"  plan pracy:    {plan_path}")
 
 
 # --- Uruchomienie ---
@@ -76,7 +80,7 @@ def parse_args():
 def main():
     """Uruchamia program: argumenty -> config -> kontekst uruchomienia -> graf -> podsumowanie ze stanu końcowego.
 
-    Po co: spis treści całego przebiegu. Etapy (skan, a dalej planner, analitycy, redaktor,
+    Po co: spis treści całego przebiegu. Etapy (skan, planner, a dalej analitycy, redaktor,
     recenzent) są węzłami grafu w doc_agents/graph.py i same zapisują swoje wyniki w output/ -
     tu tylko uruchamiamy graf i pokazujemy, co powstało.
     """
@@ -86,8 +90,9 @@ def main():
     context = create_run_context(config)
     final_state = run_graph(args.project, context)
     map_path = context.run_store.path("project_map.json")
+    plan_path = context.run_store.path("plan.json")
 
-    print_summary(args.config, final_state["project_map"], map_path)
+    print_summary(args.config, final_state["project_map"], map_path, final_state["plan"], plan_path)
 
 
 if __name__ == "__main__":

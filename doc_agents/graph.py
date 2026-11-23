@@ -1,10 +1,14 @@
 """Graf LangGraph: kolejność etapów generowania dokumentacji.
 
 Co robi: build_graph() składa graf z węzłów i krawędzi, run_graph() uruchamia go dla projektu.
-Na tym etapie graf ma jeden węzeł:
-    START -> scan -> END
-scan buduje mapę projektu (scanner.build_project_map), zapisuje ją do output/project_map.json
-i dopisuje do stanu. Kolejne kroki dodadzą węzły agentów (planner, analitycy, redaktor, recenzent).
+Na tym etapie graf ma dwa węzły:
+    START -> scan -> plan -> END
+    - scan buduje mapę projektu (scanner.build_project_map), zapisuje ją do output/project_map.json
+      i dopisuje do stanu,
+    - plan (agent planner, doc_agents/agents/planner.py) na podstawie mapy tworzy plan pracy zespołu,
+      zapisuje go do output/plan.json i dopisuje do stanu.
+Kolejne kroki dodadzą węzły pozostałych agentów (analitycy, redaktor, recenzent).
+Węzły agentów leżą w doc_agents/agents/ (każdy agent w osobnym pliku) - tu tylko je łączymy.
 
 Jak czytać graf:
     - węzeł = zwykła funkcja (state, runtime) -> dict: czyta stan, zwraca tylko zmienione pola,
@@ -13,7 +17,7 @@ Jak czytać graf:
     - każdy węzeł sam zapisuje swój wynik w output/ (po przebiegu widać wynik każdego etapu,
       także gdy coś padnie w połowie).
 
-Test ręczny z katalogu repo (uruchamia graf i wypisuje stan końcowy):
+Test ręczny z katalogu repo (uruchamia graf i wypisuje stan końcowy; wymaga LLM_API_KEY i LLM_BASE_URL):
     python -m doc_agents.graph <katalog projektu>
 """
 
@@ -23,6 +27,7 @@ import sys
 from langgraph.graph import END, START, StateGraph
 from langgraph.runtime import Runtime
 
+from doc_agents.agents.planner import planner_node
 from doc_agents.config import load_config
 from doc_agents.context import RunContext, create_run_context
 from doc_agents.scanner import build_project_map
@@ -50,7 +55,7 @@ def scan_node(state: DocState, runtime: Runtime[RunContext]) -> dict:
 
 
 def build_graph():
-    """Składa i kompiluje graf: START -> scan -> END, ze stanem DocState i kontekstem RunContext.
+    """Składa i kompiluje graf: START -> scan -> plan -> END, ze stanem DocState i kontekstem RunContext.
 
     Po co: jedno miejsce, w którym widać wszystkie etapy i ich kolejność; kolejne węzły
     dopisuje się tutaj. compile() sprawdza poprawność grafu (np. brakujące krawędzie)
@@ -58,8 +63,10 @@ def build_graph():
     """
     graph_builder = StateGraph(DocState, context_schema=RunContext)
     graph_builder.add_node("scan", scan_node)
+    graph_builder.add_node("plan", planner_node)
     graph_builder.add_edge(START, "scan")
-    graph_builder.add_edge("scan", END)
+    graph_builder.add_edge("scan", "plan")
+    graph_builder.add_edge("plan", END)
 
     skompilowany_graf = graph_builder.compile()
     return skompilowany_graf
@@ -80,9 +87,10 @@ def run_graph(project_path: str, context: RunContext) -> DocState:
 
 
 def print_final_state(state: DocState) -> None:
-    """Wypisuje stan końcowy: ścieżkę projektu i podsumowanie mapy projektu (technologia, pliki, jednostki kodu).
+    """Wypisuje stan końcowy: ścieżkę projektu, podsumowanie mapy projektu (technologia, pliki, jednostki kodu)
+    i planu (liczba zadań, pliki wiedzy, rozdziały).
 
-    Po co: przy teście ręcznym widać, że węzeł scan zadziałał i jego wynik trafił do stanu.
+    Po co: przy teście ręcznym widać, że węzły scan i plan zadziałały i ich wyniki trafiły do stanu.
     """
     project_map = state["project_map"]
     print("=== Stan końcowy grafu ===")
@@ -94,6 +102,14 @@ def print_final_state(state: DocState) -> None:
     print(f"  jednostki kodu:  {len(project_map.code_units)}")
     for unit in project_map.code_units:
         print(f"    {unit.name}")
+    plan = state["plan"]
+    print("plan:")
+    print(f"  zadania analityków:        {len(plan.tasks)}")
+    print(f"  pliki wiedzy - analitycy:  {plan.analyst_kb_files}")
+    print(f"  pliki wiedzy - redaktor:   {plan.editor_kb_files}")
+    print(f"  rozdziały części opisowej: {len(plan.sections)}")
+    for section in plan.sections:
+        print(f"    {section.title}")
 
 
 # --- Test ręczny ---
@@ -103,7 +119,7 @@ def manual_test() -> None:
     """Test ręczny: tworzy RunContext z config.yaml, uruchamia graf dla projektu z argumentu
     (domyślnie bieżący katalog) i wypisuje stan końcowy.
 
-    Po co: sprawdzenie grafu na prawdziwym projekcie - mapa w stanie i w output/project_map.json.
+    Po co: sprawdzenie grafu na prawdziwym projekcie - mapa i plan w stanie oraz w output/.
     """
     project_path = os.getcwd()
     if len(sys.argv) > 1:

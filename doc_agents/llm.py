@@ -93,6 +93,17 @@ def get_model_for_agent(config: AppConfig, agent: str) -> BaseChatModel:
     return model
 
 
+def get_structured_output_method(config: AppConfig, agent: str) -> str:
+    """Zwraca metodę structured output (np. function_calling, json_schema) z profilu przypisanego agentowi.
+
+    Po co: agent prosi model o odpowiedź zgodną ze schematem (with_structured_output), a obsługiwana
+    metoda zależy od modelu - ustala ją probe_llm i zapisuje się ją w profilu, nie w kodzie agenta.
+    """
+    profile = config.llm.profiles[config.llm.agents[agent]]
+    metoda = profile.structured_output_method
+    return metoda
+
+
 # --- Test ręczny ---
 
 

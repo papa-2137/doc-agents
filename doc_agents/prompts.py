@@ -105,6 +105,7 @@ def manual_test() -> None:
         "project_map": '{"technology": "python", "entrypoints": ["main.py"], "code_units": ["main.py", "src/report.py"]}',
         "kb_index": "rpa_framework.md\nKiedy użyć: projekt oparty na frameworku RPA.\nTagi: rpa, framework",
         "fixed_sections": "- Schemat przepływu (wymagany): narysuj przepływ robota znakami ASCII.",
+        "formal_fields": "- Cel i zakres procesu\n- Pliki konfiguracyjne",
     }
     system_text, user_text = render_prompt(config.paths.prompts, "planner", przykladowe_dane)
     print_prompt("planner", system_text, user_text)

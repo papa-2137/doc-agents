@@ -11,3 +11,7 @@ Zaplanuj dokumentację projektu „{{ project_name }}”.
 <stale_rozdzialy>
 {{ fixed_sections }}
 </stale_rozdzialy>
+
+<czesc_formalna>
+{{ formal_fields }}
+</czesc_formalna>
