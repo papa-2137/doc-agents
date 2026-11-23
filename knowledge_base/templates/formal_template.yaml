@@ -1,0 +1,88 @@
+# Pola części formalnej dokumentu - pierwsza wersja, do zmiany przez zespół.
+# Część formalna ma zawsze te same pola w tym samym układzie (lista kontrolna informacji operacyjnych).
+# Nowe pole = nowy wpis poniżej; kod nie zna konkretnych pól. Układ dokumentu: formal_template.md.
+#
+# Klucze pola:
+#   name        - identyfikator pola (bez spacji), używany w szablonie układu
+#   title       - nagłówek pola w dokumencie
+#   type        - text (akapit) albo list (lista punktów)
+#   required    - true: recenzent zgłosi brak, gdy pole jest puste
+#   source      - llm (wypełnia model na podstawie analizy) albo scanner (wypełnia kod z mapy projektu)
+#   scanner     - tylko dla source: scanner - co wziąć z mapy: entrypoints albo role:<rola> (np. role:secret)
+#   instruction - tylko dla source: llm - polecenie dla modelu: co wpisać i czego unikać
+
+fields:
+  - name: cel_procesu
+    title: Cel i zakres procesu
+    type: text
+    required: true
+    source: llm
+    instruction: >
+      Opisz w 2-4 zdaniach, jaki proces biznesowy automatyzuje robot, co jest jego wejściem i co efektem.
+      Pisz językiem biznesowym, bez szczegółów technicznych.
+
+  - name: systemy
+    title: Systemy i aplikacje
+    type: list
+    required: true
+    source: llm
+    instruction: >
+      Wymień systemy, aplikacje i strony, z którymi pracuje robot (np. przeglądarka i adres strony, Excel,
+      baza danych, poczta), przy każdym jednym zdaniem: co robot w nim robi.
+
+  - name: dane_wejsciowe
+    title: Dane wejściowe
+    type: list
+    required: true
+    source: llm
+    instruction: >
+      Wymień źródła danych wejściowych (pliki, kolejki, systemy) z lokalizacją lub nazwą parametru konfiguracji,
+      skąd robot je bierze, i krótko opisz ich zawartość.
+
+  - name: wyniki
+    title: Wyniki i dane wyjściowe
+    type: list
+    required: true
+    source: llm
+    instruction: >
+      Wymień, co robot zostawia po sobie: zmiany w systemach, pliki wynikowe, raporty, wpisy w bazie.
+      Podaj lokalizację lub nazwę parametru konfiguracji.
+
+  - name: punkty_wejscia
+    title: Punkty wejścia
+    type: list
+    required: true
+    source: scanner
+    scanner: entrypoints
+
+  - name: uruchomienie
+    title: Uruchomienie i wymagania
+    type: list
+    required: true
+    source: llm
+    instruction: >
+      Opisz, jak uruchomić robota (polecenie, parametry) i co musi być przygotowane wcześniej:
+      wersja Pythona, biblioteki, przeglądarka i sterownik, zmienne środowiskowe, dostępy.
+
+  - name: konfiguracja
+    title: Pliki konfiguracyjne
+    type: list
+    required: false
+    source: scanner
+    scanner: role:config
+
+  - name: sekrety
+    title: Sekrety i dostępy
+    type: list
+    required: true
+    source: scanner
+    scanner: role:secret
+
+  - name: obsluga_bledow
+    title: Obsługa błędów i logi
+    type: text
+    required: true
+    source: llm
+    instruction: >
+      Opisz, jak robot reaguje na błędy (błędy biznesowe i techniczne, ponowienia, pominięcie elementu,
+      zatrzymanie) oraz gdzie zapisuje logi i raport z przebiegu.

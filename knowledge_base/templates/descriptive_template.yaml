@@ -1,0 +1,39 @@
+# Stałe rozdziały części opisowej - pierwsza wersja, do zmiany przez zespół.
+# Planner zawsze dodaje je do rozdziałów, które sam proponuje dla danego projektu; redaktor dostaje
+# instrukcję każdego z nich. Rozdział wymagany (required: true) musi mieć w dokumencie nagłówek
+# zawierający title - sprawdza to kod recenzenta (bez rozróżniania wielkości liter).
+# Nowy stały rozdział = nowy wpis poniżej, bez zmian w kodzie.
+
+sections:
+  - title: Schemat przepływu
+    required: true
+    instruction: >
+      Narysuj przepływ robota znakami ASCII w bloku kodu (szerokość do 80 znaków): start, inicjalizacja,
+      pętla po elementach do przetworzenia, główne kroki, rozgałęzienia przy błędach, zakończenie.
+      Zaznacz, które kroki wywołuje framework, a które kod robota.
+
+  - title: Ścieżki procesu krok po kroku
+    required: true
+    instruction: >
+      Opisz wszystkie ścieżki, którymi może przejść robot, wywnioskowane z kodu: ścieżkę główną (wszystko
+      przebiega poprawnie) oraz ścieżki alternatywne - przy błędzie biznesowym (np. złe dane, brak elementu),
+      przy błędzie technicznym (np. strona się nie ładuje) i przy każdym innym rozgałęzieniu w kodzie.
+      Każda ścieżka jako osobna podsekcja z nazwą i warunkiem, kiedy robot nią idzie, a pod nią numerowana
+      lista kroków w języku naturalnym, w kolejności wykonania, np. „1. Robot otwiera przeglądarkę Edge.
+      2. Robot przechodzi na stronę https://www.rpachallenge.com. 3. Robot klika przycisk Start.
+      4. Robot wypełnia pola formularza (First Name, Last Name, Email...)”. Podawaj konkretnie: nazwy aplikacji,
+      adresy stron, nazwy przycisków i pól, pliki i arkusze, decyzje (jeśli..., to...) oraz pętle (dla każdego
+      wiersza pliku...). Gdy szczegół nie wynika z kodu (np. selektor bez czytelnej nazwy), napisz to wprost
+      zamiast zgadywać.
+
+  - title: Gdzie szukać przyczyny błędu
+    required: true
+    instruction: >
+      Dla typowych problemów (robot nie startuje, błąd logowania, zmiana strony lub aplikacji, złe dane wejściowe)
+      wskaż, w którym pliku i funkcji szukać przyczyny oraz co sprawdzić w logach.
+
+  - title: Jak bezpiecznie wprowadzić zmianę
+    required: false
+    instruction: >
+      Opisz, które miejsca kodu zmienia się najczęściej (selektory, konfiguracja, reguły biznesowe), od czego zacząć,
+      co przetestować po zmianie i czego nie ruszać bez potrzeby.
