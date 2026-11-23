@@ -54,8 +54,10 @@ class RunStore:
         """Zapisuje tekst do pliku w katalogu wyników (UTF-8, nadpisuje istniejący) i zwraca ścieżkę pliku.
 
         Po co: zapis wyników tekstowych, np. dokumentu Markdown albo promptu wysłanego do modelu.
+        Nazwa może zawierać podkatalog (np. "notes/main.py.json") - brakujący podkatalog jest tworzony.
         """
         sciezka_pliku = self.path(name)
+        os.makedirs(os.path.dirname(sciezka_pliku), exist_ok=True)
         with open(sciezka_pliku, "w", encoding="utf-8") as f:
             f.write(text)
         return sciezka_pliku

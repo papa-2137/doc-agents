@@ -3,8 +3,9 @@
 Co robi: wczytuje argumenty i config.yaml, przygotowuje kontekst uruchomienia (RunContext)
 i uruchamia graf LangGraph (doc_agents/graph.py), a na końcu wypisuje podsumowanie ze stanu
 końcowego grafu. Na tym etapie graf skanuje projekt (bez modelu językowego, wynik:
-output/project_map.json) i tworzy plan pracy zespołu (agent planner, wynik: output/plan.json);
-kolejne etapy (agenci) dochodzą jako węzły grafu.
+output/project_map.json), tworzy plan pracy zespołu (agent planner, wynik: output/plan.json)
+i równolegle analizuje jednostki kodu (analitycy, wyniki: output/notes/); kolejne etapy
+(redaktor, recenzent) dochodzą jako węzły grafu.
 
 Uruchomienie z katalogu repo:
     python main.py --project <ścieżka do projektu>
@@ -27,9 +28,12 @@ from doc_agents.schemas import Plan, ProjectMap
 # --- Wyświetlanie ---
 
 
-def print_summary(config_path: str, project_map: ProjectMap, map_path: str, plan: Plan, plan_path: str) -> None:
+def print_summary(
+    config_path: str, project_map: ProjectMap, map_path: str, plan: Plan, plan_path: str, notes_count: int, notes_dir: str
+) -> None:
     """Wypisuje podsumowanie przebiegu: plik configu, projekt, technologię, liczbę plików, punkty wejścia,
-    jednostki kodu do analizy, ścieżkę mapy projektu oraz skrót planu (zadania, rozdziały) i ścieżkę planu.
+    jednostki kodu do analizy, ścieżkę mapy projektu, skrót planu (zadania, rozdziały) i ścieżkę planu
+    oraz liczbę notatek analityków i ich katalog.
 
     Po co: na obecnym etapie to widoczny efekt uruchomienia main.py - od razu widać, czy projekt
     został rozpoznany i jak planner zaplanował pracę, a szczegóły są w project_map.json i plan.json.
@@ -54,6 +58,8 @@ def print_summary(config_path: str, project_map: ProjectMap, map_path: str, plan
     for section in plan.sections:
         print(f"    {section.title}")
     print(f"  plan pracy:    {plan_path}")
+    print(f"  notatki analityków: {notes_count} z {len(plan.tasks)} zadań")
+    print(f"  katalog notatek: {notes_dir}")
 
 
 # --- Uruchomienie ---
@@ -80,7 +86,7 @@ def parse_args():
 def main():
     """Uruchamia program: argumenty -> config -> kontekst uruchomienia -> graf -> podsumowanie ze stanu końcowego.
 
-    Po co: spis treści całego przebiegu. Etapy (skan, planner, a dalej analitycy, redaktor,
+    Po co: spis treści całego przebiegu. Etapy (skan, planner, analitycy, a dalej redaktor,
     recenzent) są węzłami grafu w doc_agents/graph.py i same zapisują swoje wyniki w output/ -
     tu tylko uruchamiamy graf i pokazujemy, co powstało.
     """
@@ -91,8 +97,17 @@ def main():
     final_state = run_graph(args.project, context)
     map_path = context.run_store.path("project_map.json")
     plan_path = context.run_store.path("plan.json")
+    notes_dir = context.run_store.path("notes")
 
-    print_summary(args.config, final_state["project_map"], map_path, final_state["plan"], plan_path)
+    print_summary(
+        args.config,
+        final_state["project_map"],
+        map_path,
+        final_state["plan"],
+        plan_path,
+        len(final_state["notes"]),
+        notes_dir,
+    )
 
 
 if __name__ == "__main__":

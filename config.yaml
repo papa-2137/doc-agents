@@ -16,7 +16,7 @@ llm:
       api_key_env: LLM_API_KEY
       base_url_env: LLM_BASE_URL
       structured_output_method: json_schema   # ustalone przez probe_llm: ten model odrzuca wymuszony tool_choice
-      params: { max_tokens: 8192 }
+      params: { max_tokens: 16000 }
   agents:
     planner: small
     analyst: small
@@ -70,3 +70,6 @@ analysis:
   # tylko jako szkielet (funkcje, klasy, docstringi) z adnotacją - przewidywalny koszt i brak
   # przekroczenia kontekstu modelu przy bardzo dużych plikach.
   max_file_size_kb: 100
+  # Ile wywołań modelu może działać naraz (analitycy pracują równolegle - po jednym na jednostkę kodu).
+  # Zmniejsz, gdy bramka modelu odrzuca zapytania limitem; zwiększ, żeby przyspieszyć duże projekty.
+  max_concurrency: 5

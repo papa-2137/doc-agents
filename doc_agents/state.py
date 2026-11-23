@@ -1,8 +1,15 @@
 """Stan grafu (DocState): dane, które węzły grafu czytają i uzupełniają w trakcie przebiegu.
 
 Co zawiera: na tym etapie ścieżkę dokumentowanego projektu (wejście grafu), mapę projektu
-(wynik węzła scan) i plan (wynik węzła plan). Kolejne kroki dopiszą tu notatki analityków,
-dokument i uwagi recenzenta.
+(wynik węzła scan), plan (wynik węzła plan) i notatki analityków (wynik węzłów analyze).
+Kolejne kroki dopiszą tu dokument i uwagi recenzenta.
+
+Pole notes ma reducer operator.add (zapis Annotated[..., operator.add]): analitycy działają
+równolegle i każdy zwraca {"notes": [swoja_notatka]}. Bez reducera kolejne wyniki nadpisywałyby
+pole; z reducerem LangGraph dokleja listy do siebie, więc po etapie analizy w notes są wszystkie notatki.
+
+AnalystInput to dane jednego analityka: węzeł analyze nie dostaje całego stanu, tylko słownik
+przekazany w Send (krok 30, graph.py) - zadanie z planu, mapę projektu i plan.
 
 Jak działa stan w LangGraph: graf zaczyna od słownika podanego w invoke() (tu: tylko project_path).
 Każdy węzeł zwraca słownik TYLKO z polami, które zmienia (częściowa aktualizacja), a LangGraph
@@ -16,9 +23,10 @@ Moduł zawiera tylko opis typu - nie ma czego testować osobno; stan sprawdza te
 (python -m doc_agents.graph).
 """
 
-from typing import TypedDict
+import operator
+from typing import Annotated, TypedDict
 
-from doc_agents.schemas import Plan, ProjectMap
+from doc_agents.schemas import AnalysisTask, ModuleNote, Plan, ProjectMap
 
 
 class DocState(TypedDict):
@@ -27,3 +35,12 @@ class DocState(TypedDict):
     project_path: str  # ścieżka bezwzględna dokumentowanego projektu (wejście grafu)
     project_map: ProjectMap  # mapa projektu - wynik węzła scan
     plan: Plan  # plan pracy zespołu - wynik węzła plan (agent planner)
+    notes: Annotated[list[ModuleNote], operator.add]  # notatki analityków - doklejane z równoległych węzłów analyze
+
+
+class AnalystInput(TypedDict):
+    """Dane jednego analityka, przekazywane do węzła analyze przez Send."""
+
+    task: AnalysisTask  # zadanie z planu: jednostka kodu i wskazówka
+    project_map: ProjectMap
+    plan: Plan

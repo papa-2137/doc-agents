@@ -16,8 +16,9 @@ adresy, przyciski, pola, pliki), decyzje i pętle - z nich redaktor składa rozd
 Kod czyta wyłącznie pliki jednostek kodu z mapy projektu (rola source) i pliki bazy wiedzy
 przez read_kb_file() - pliki z sekretami nigdy nie trafiają do modelu.
 
-Na tym etapie analityk działa bez grafu; węzeł grafu z równoległym uruchomieniem
-analityków dla wszystkich zadań dojdzie w kroku 30.
+analyst_node() to węzeł grafu analyze: graf uruchamia go równolegle, osobno dla każdego zadania
+z planu (Send w graph.py). Węzeł zapisuje notatkę w output/notes/<jednostka>.json (ukośniki w nazwie
+jednostki zamienione na "__") i zwraca ją do stanu w liście notes.
 
 Test ręczny z katalogu repo (analizuje jedną jednostkę na podstawie output/plan.json
 z poprzedniego uruchomienia main.py; wymaga LLM_API_KEY i LLM_BASE_URL):
@@ -29,6 +30,7 @@ import os
 import sys
 
 from langchain_core.messages import HumanMessage, SystemMessage
+from langgraph.runtime import Runtime
 
 from doc_agents.config import load_config
 from doc_agents.context import RunContext, create_run_context
@@ -37,6 +39,7 @@ from doc_agents.llm import get_structured_output_method, invoke_structured
 from doc_agents.prompts import render_prompt
 from doc_agents.scanner import build_project_map
 from doc_agents.schemas import AnalysisTask, CodeUnit, ModuleNote, Plan, ProjectMap
+from doc_agents.state import AnalystInput
 from doc_agents.technologies import get_technology
 from doc_agents.technologies.base import Technology
 
@@ -169,6 +172,36 @@ def create_note(task: AnalysisTask, project_map: ProjectMap, plan: Plan, context
     )
     notatka.unit_name = task.unit_name
     return notatka
+
+
+# --- Węzeł grafu ---
+
+
+def note_filename(unit_name: str) -> str:
+    """Zwraca nazwę pliku notatki w katalogu wyników: notes/<nazwa jednostki z "/" zamienionym na "__">.json,
+    np. "src/challange_page.py" -> "notes/src__challange_page.py.json".
+
+    Po co: notatki leżą w jednym podkatalogu, oddzielone od pozostałych plików JSON, a płaska nazwa
+    jednoznacznie wskazuje jednostkę bez odtwarzania struktury katalogów projektu.
+    """
+    nazwa_pliku = "notes/" + unit_name.replace("/", "__") + ".json"
+    return nazwa_pliku
+
+
+def analyst_node(state: AnalystInput, runtime: Runtime[RunContext]) -> dict:
+    """Węzeł analyze: tworzy notatkę dla zadania z danych analityka, zapisuje ją w output/notes/
+    i zwraca do stanu jako jednoelementową listę notes.
+
+    Po co: graf uruchamia ten węzeł równolegle dla każdego zadania z planu. Węzeł dostaje tylko
+    dane swojego zadania (AnalystInput z Send), a lista w wyniku jest doklejana do pola notes
+    przez reducer (state.py), więc wyniki równoległych analityków się nie nadpisują.
+    """
+    context = runtime.context
+    note = create_note(state["task"], state["project_map"], state["plan"], context)
+    context.run_store.save_json(note_filename(note.unit_name), note)
+
+    aktualizacja_stanu = {"notes": [note]}
+    return aktualizacja_stanu
 
 
 # --- Wyświetlanie ---

@@ -24,6 +24,7 @@ Zasady:
 - Opisuj tylko to, co wynika z kodu. Niepewność nazwij wprost.
 - Nie przepisuj wartości sekretów (haseł, kluczy, tokenów), nawet jeśli są w kodzie - podaj tylko, że sekret jest użyty i skąd pochodzi. Taki przypadek opisz w pułapkach.
 - Pole puste, gdy nie dotyczy tej jednostki (pusty tekst albo pusta lista) - nie wypełniaj na siłę.
+- Pola tekstowe (np. purpose) wypełniaj zwykłym tekstem, nie listą. W zależnościach zewnętrznych nie wymieniaj biblioteki standardowej języka - tylko to, co trzeba zainstalować.
 - Pisz po polsku, zwięźle i konkretnie. Nazwy z kodu (funkcje, pliki, selektory) podawaj dokładnie.
 
 Odpowiedź zwracasz w formacie wskazanym przez schemat odpowiedzi.

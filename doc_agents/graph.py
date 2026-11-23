@@ -1,13 +1,21 @@
 """Graf LangGraph: kolejność etapów generowania dokumentacji.
 
 Co robi: build_graph() składa graf z węzłów i krawędzi, run_graph() uruchamia go dla projektu.
-Na tym etapie graf ma dwa węzły:
-    START -> scan -> plan -> END
+Na tym etapie graf ma trzy węzły:
+    START -> scan -> plan -> analyze (równolegle, po jednym na zadanie z planu) -> END
     - scan buduje mapę projektu (scanner.build_project_map), zapisuje ją do output/project_map.json
       i dopisuje do stanu,
     - plan (agent planner, doc_agents/agents/planner.py) na podstawie mapy tworzy plan pracy zespołu,
-      zapisuje go do output/plan.json i dopisuje do stanu.
-Kolejne kroki dodadzą węzły pozostałych agentów (analitycy, redaktor, recenzent).
+      zapisuje go do output/plan.json i dopisuje do stanu,
+    - analyze (agent analityk, doc_agents/agents/analyst.py) analizuje jedną jednostkę kodu, zapisuje
+      notatkę w output/notes/ i dokleja ją do listy notes w stanie.
+Kolejne kroki dodadzą węzły redaktora i recenzenta.
+
+Równoległość (Send): po węźle plan funkcja dispatch_analysts() zwraca listę Send("analyze", dane) -
+po jednym na zadanie z planu. LangGraph uruchamia wtedy węzeł analyze tyle razy, ile jest zadań,
+równolegle, a każde wywołanie dostaje tylko swoje dane (AnalystInput w state.py). Wyniki łączy
+reducer pola notes. Liczbę równoczesnych wywołań ogranicza analysis.max_concurrency z config.yaml
+(przekazywane w invoke jako max_concurrency).
 Węzły agentów leżą w doc_agents/agents/ (każdy agent w osobnym pliku) - tu tylko je łączymy.
 
 Jak czytać graf:
@@ -26,7 +34,9 @@ import sys
 
 from langgraph.graph import END, START, StateGraph
 from langgraph.runtime import Runtime
+from langgraph.types import Send
 
+from doc_agents.agents.analyst import analyst_node
 from doc_agents.agents.planner import planner_node
 from doc_agents.config import load_config
 from doc_agents.context import RunContext, create_run_context
@@ -51,11 +61,26 @@ def scan_node(state: DocState, runtime: Runtime[RunContext]) -> dict:
     return aktualizacja_stanu
 
 
+def dispatch_analysts(state: DocState) -> list[Send]:
+    """Zwraca listę Send("analyze", dane analityka) - po jednym na każde zadanie z planu.
+
+    Po co: krawędź warunkowa po węźle plan - tak LangGraph uruchamia równolegle tyle analityków,
+    ile zadań jest w planie. Dane analityka (AnalystInput) to zadanie, mapa projektu i plan;
+    węzeł analyze nie potrzebuje reszty stanu.
+    """
+    wysylki = []
+    for task in state["plan"].tasks:
+        dane_analityka = {"task": task, "project_map": state["project_map"], "plan": state["plan"]}
+        wysylki.append(Send("analyze", dane_analityka))
+    return wysylki
+
+
 # --- Graf ---
 
 
 def build_graph():
-    """Składa i kompiluje graf: START -> scan -> plan -> END, ze stanem DocState i kontekstem RunContext.
+    """Składa i kompiluje graf: START -> scan -> plan -> analyze (×N, równolegle) -> END,
+    ze stanem DocState i kontekstem RunContext.
 
     Po co: jedno miejsce, w którym widać wszystkie etapy i ich kolejność; kolejne węzły
     dopisuje się tutaj. compile() sprawdza poprawność grafu (np. brakujące krawędzie)
@@ -64,9 +89,11 @@ def build_graph():
     graph_builder = StateGraph(DocState, context_schema=RunContext)
     graph_builder.add_node("scan", scan_node)
     graph_builder.add_node("plan", planner_node)
+    graph_builder.add_node("analyze", analyst_node)
     graph_builder.add_edge(START, "scan")
     graph_builder.add_edge("scan", "plan")
-    graph_builder.add_edge("plan", END)
+    graph_builder.add_conditional_edges("plan", dispatch_analysts, ["analyze"])
+    graph_builder.add_edge("analyze", END)
 
     skompilowany_graf = graph_builder.compile()
     return skompilowany_graf
@@ -76,10 +103,12 @@ def run_graph(project_path: str, context: RunContext) -> DocState:
     """Uruchamia graf dla projektu i zwraca stan końcowy.
 
     Po co: punkt wejścia do całego przebiegu dla main.py i testów. Stan startowy zawiera
-    tylko ścieżkę projektu (bezwzględną), resztę uzupełniają węzły.
+    tylko ścieżkę projektu (bezwzględną), resztę uzupełniają węzły. max_concurrency z configu
+    ogranicza liczbę równocześnie działających węzłów (analityków wołających model).
     """
     stan_poczatkowy = {"project_path": os.path.abspath(project_path)}
-    stan_koncowy = build_graph().invoke(stan_poczatkowy, context=context)
+    ustawienia_przebiegu = {"max_concurrency": context.config.analysis.max_concurrency}
+    stan_koncowy = build_graph().invoke(stan_poczatkowy, config=ustawienia_przebiegu, context=context)
     return stan_koncowy
 
 
@@ -87,10 +116,11 @@ def run_graph(project_path: str, context: RunContext) -> DocState:
 
 
 def print_final_state(state: DocState) -> None:
-    """Wypisuje stan końcowy: ścieżkę projektu, podsumowanie mapy projektu (technologia, pliki, jednostki kodu)
-    i planu (liczba zadań, pliki wiedzy, rozdziały).
+    """Wypisuje stan końcowy: ścieżkę projektu, podsumowanie mapy projektu (technologia, pliki, jednostki kodu),
+    planu (liczba zadań, pliki wiedzy, rozdziały) i notatek analityków (liczba, jednostki).
 
-    Po co: przy teście ręcznym widać, że węzły scan i plan zadziałały i ich wyniki trafiły do stanu.
+    Po co: przy teście ręcznym widać, że wszystkie węzły zadziałały i ich wyniki trafiły do stanu -
+    w szczególności, że notatek jest tyle, ile zadań w planie.
     """
     project_map = state["project_map"]
     print("=== Stan końcowy grafu ===")
@@ -110,6 +140,10 @@ def print_final_state(state: DocState) -> None:
     print(f"  rozdziały części opisowej: {len(plan.sections)}")
     for section in plan.sections:
         print(f"    {section.title}")
+    notes = state["notes"]
+    print(f"notes: {len(notes)} (zadań w planie: {len(plan.tasks)})")
+    for note in notes:
+        print(f"  {note.unit_name}: {len(note.process_steps)} kroków procesu")
 
 
 # --- Test ręczny ---
@@ -119,7 +153,7 @@ def manual_test() -> None:
     """Test ręczny: tworzy RunContext z config.yaml, uruchamia graf dla projektu z argumentu
     (domyślnie bieżący katalog) i wypisuje stan końcowy.
 
-    Po co: sprawdzenie grafu na prawdziwym projekcie - mapa i plan w stanie oraz w output/.
+    Po co: sprawdzenie grafu na prawdziwym projekcie - mapa, plan i notatki w stanie oraz w output/.
     """
     project_path = os.getcwd()
     if len(sys.argv) > 1:

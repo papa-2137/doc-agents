@@ -55,9 +55,10 @@ class ScanConfig(BaseModel):
 
 
 class AnalysisConfig(BaseModel):
-    """Sekcja `analysis`: ograniczenia treści wysyłanej do analityków."""
+    """Sekcja `analysis`: ograniczenia pracy analityków (rozmiar treści, liczba równoczesnych wywołań)."""
 
     max_file_size_kb: int  # plik kodu większy niż limit trafia do analityka tylko jako szkielet (outline)
+    max_concurrency: int  # ile wywołań modelu naraz przy równoległej pracy analityków
 
 
 class AppConfig(BaseModel):

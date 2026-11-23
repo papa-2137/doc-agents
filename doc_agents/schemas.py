@@ -107,7 +107,10 @@ class ModuleNote(BaseModel):
     """Notatka analityka o jednej jednostce kodu - jedyne źródło wiedzy o kodzie dla redaktora."""
 
     unit_name: str = Field(description="Nazwa analizowanej jednostki kodu, dokładnie jak w zadaniu.")
-    purpose: str = Field(description="2-4 zdania: do czego służy ta jednostka i jaką rolę pełni w procesie robota.")
+    purpose: str = Field(
+        description="2-4 zdania: do czego służy ta jednostka i jaką rolę pełni w procesie robota. "
+        "Jeden akapit zwykłego tekstu, nie lista."
+    )
     automated_application: str = Field(
         description="Aplikacje, strony i systemy, z którymi ta jednostka pracuje (np. 'przeglądarka Edge, "
         "https://www.rpachallenge.com'); pusty tekst, gdy żadnych."
@@ -132,7 +135,8 @@ class ModuleNote(BaseModel):
         "(z nazwą i znaczeniem, bez wartości sekretów)."
     )
     external_dependencies: list[str] = Field(
-        description="Biblioteki i frameworki spoza projektu, z których korzysta jednostka, z krótkim 'do czego'."
+        description="Biblioteki i frameworki spoza projektu, z których korzysta jednostka, z krótkim 'do czego'. "
+        "Bez biblioteki standardowej języka (np. os, json, pathlib) - tylko to, co trzeba zainstalować."
     )
     pitfalls: list[str] = Field(
         description="Pułapki i ryzyka: kruche selektory, sztywne ścieżki i czasy oczekiwania, sekrety w kodzie, "
