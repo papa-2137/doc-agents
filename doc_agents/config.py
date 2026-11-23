@@ -61,6 +61,12 @@ class AnalysisConfig(BaseModel):
     max_concurrency: int  # ile wywołań modelu naraz przy równoległej pracy analityków
 
 
+class LimitsConfig(BaseModel):
+    """Sekcja `limits`: limity przebiegu."""
+
+    max_review_rounds: int  # najwyższa liczba recenzji; potem dokument trafia do final.md bez akceptacji
+
+
 class AppConfig(BaseModel):
     """Cały config.yaml."""
 
@@ -68,6 +74,7 @@ class AppConfig(BaseModel):
     paths: PathsConfig
     scan: ScanConfig
     analysis: AnalysisConfig
+    limits: LimitsConfig
 
 
 # --- Sprawdzenia i przetwarzanie ---

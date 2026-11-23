@@ -15,3 +15,13 @@ Wypełnij pola części formalnej dokumentacji projektu „{{ project_name }}”
 <baza_wiedzy>
 {{ kb_files }}
 </baza_wiedzy>
+
+{% if review_issues %}
+<poprzednia_wersja>
+{{ previous_document }}
+</poprzednia_wersja>
+
+<uwagi_recenzenta>
+{{ review_issues }}
+</uwagi_recenzenta>
+{% endif %}

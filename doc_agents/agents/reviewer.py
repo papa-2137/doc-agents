@@ -13,8 +13,9 @@ gdy kod nie znalazł braków.
 Uwagi to zdania zaczynające się od nazwy rozdziału lub pola w nawiasie kwadratowym, np.
 „[Ścieżki procesu krok po kroku] ...” - w kroku 34 trafią do redaktora jako polecenia poprawek.
 
-Wynik w output/: review.json. Na tym etapie recenzent działa bez grafu (węzeł i pętla recenzji
-dojdą w kroku 34).
+reviewer_node() to węzeł grafu review: recenzuje dokument ze stanu, zapisuje output/review_NN.json
+(NN = numer recenzji: 01, 02, ...) i ustala, czy pętla recenzji się kończy - dokument zaakceptowany
+albo osiągnięty limit limits.max_review_rounds z config.yaml. Test ręczny zapisuje output/review.json.
 
 Test ręczny z katalogu repo - na wynikach poprzedniego uruchomienia main.py (output/ nie jest
 czyszczony; jedno wywołanie modelu; wymaga LLM_API_KEY i LLM_BASE_URL):
@@ -24,6 +25,7 @@ czyszczony; jedno wywołanie modelu; wymaga LLM_API_KEY i LLM_BASE_URL):
 import os
 
 from langchain_core.messages import HumanMessage, SystemMessage
+from langgraph.runtime import Runtime
 
 from doc_agents.agents.editor import build_editor_kb_text, build_notes_text, load_notes
 from doc_agents.config import load_config
@@ -32,6 +34,7 @@ from doc_agents.llm import get_structured_output_method, invoke_structured
 from doc_agents.output import RunStore
 from doc_agents.prompts import render_prompt
 from doc_agents.schemas import ModuleNote, Plan, ProjectMap, ReviewResult
+from doc_agents.state import DocState
 
 
 # --- Recenzja ---
@@ -84,6 +87,40 @@ def review_document(
 
     wynik = ReviewResult(approved=approved, issues=issues, suggestions=ocena_modelu.suggestions)
     return wynik
+
+
+# --- Węzeł grafu ---
+
+
+def review_filename(round_number: int) -> str:
+    """Zwraca nazwę pliku recenzji danej rundy: review_01.json, review_02.json, ...
+
+    Po co: każda recenzja zostaje w output/ obok dokumentu z tej samej rundy (document_NN.md).
+    """
+    nazwa_pliku = f"review_{round_number:02d}.json"
+    return nazwa_pliku
+
+
+def reviewer_node(state: DocState, runtime: Runtime[RunContext]) -> dict:
+    """Węzeł review: recenzuje dokument ze stanu, zapisuje recenzję jako output/review_NN.json i zwraca do stanu
+    recenzję, numer recenzji i decyzję review_done (zaakceptowany albo osiągnięty limit recenzji z configu).
+
+    Po co: punkt decyzji pętli recenzji. Decyzję liczy węzeł (ma dostęp do configu), a krawędź
+    warunkowa w graph.py tylko ją odczytuje - logika limitu jest w jednym miejscu.
+    """
+    context = runtime.context
+    round_number = 1
+    if "review_round" in state:
+        round_number = state["review_round"] + 1
+
+    review = review_document(
+        state["project_map"].project_name, state["document"], state["plan"], state["notes"], state["missing"], context
+    )
+    context.run_store.save_json(review_filename(round_number), review)
+    review_done = review.approved or round_number >= context.config.limits.max_review_rounds
+
+    aktualizacja_stanu = {"review": review, "review_round": round_number, "review_done": review_done}
+    return aktualizacja_stanu
 
 
 # --- Wczytanie wyników poprzednich etapów ---

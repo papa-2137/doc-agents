@@ -29,10 +29,15 @@ Cały dokument składa render_document() z szablonu knowledge_base/templates/doc
 (tytuł, część formalna, część opisowa) - układ zmienia się w szablonie, nie w kodzie.
 
 Wyniki w output/: formal.md, formal_section.json, formal_missing.txt, descriptive_part.json,
-descriptive_missing.txt i document.md (cały dokument).
+descriptive_missing.txt i document_NN.md (cały dokument z rundy NN).
 
 create_document() wykonuje cały etap redaktora (obie części, zapis wyników, złożenie dokumentu);
 editor_node() to węzeł grafu edit, który ją wywołuje i oddaje do stanu dokument i listę braków.
+
+Poprawka po recenzji: gdy w stanie jest odrzucona recenzja, redaktor dostaje w obu promptach poprzednią
+wersję dokumentu i uwagi recenzenta (tagi <poprzednia_wersja>, <uwagi_recenzenta>; w pierwszej rundzie
+zmienne są puste i szablon pomija te sekcje) i poprawia tylko wskazane miejsca. Każda runda zapisuje
+dokument jako output/document_NN.md (01, 02, ...); pozostałe pliki redaktora zawierają ostatnią rundę.
 
 Test ręczny z katalogu repo - na wynikach poprzedniego uruchomienia main.py (output/ nie jest
 czyszczony; dwa wywołania modelu: część formalna i opisowa; wymaga LLM_API_KEY i LLM_BASE_URL):
@@ -142,14 +147,35 @@ def build_editor_kb_text(knowledge_base_dir: str, filenames: list[str]) -> str:
     return tekst_wiedzy
 
 
+def build_revision_variables(previous_document: str, review_issues: list[str]) -> dict:
+    """Zwraca zmienne promptu dla poprawki po recenzji: poprzednią wersję dokumentu i uwagi recenzenta
+    jako listę punktów. W pierwszej rundzie (bez uwag) obie wartości są puste.
+
+    Po co: oba prompty redaktora mają te same warunkowe sekcje poprawki - pusta lista uwag sprawia,
+    że szablon je pomija i redaktor pisze dokument od zera.
+    """
+    linie_uwag = []
+    for issue in review_issues:
+        linie_uwag.append(f"- {issue}")
+
+    zmienne_poprawki = {"previous_document": previous_document, "review_issues": "\n".join(linie_uwag)}
+    return zmienne_poprawki
+
+
 def ask_formal_values(
-    template_fields: list[dict], project_map: ProjectMap, plan: Plan, notes: list[ModuleNote], context: RunContext
+    template_fields: list[dict],
+    project_map: ProjectMap,
+    plan: Plan,
+    notes: list[ModuleNote],
+    context: RunContext,
+    revision: dict,
 ) -> dict[str, list[str]]:
     """Wywołuje model agenta editor dla pól source: llm i zwraca słownik nazwa pola -> wartość (lista tekstów).
     Pola o nazwach spoza szablonu (zmyślone przez model) są pomijane.
 
     Po co: jedno wywołanie modelu dla wszystkich pól tekstowych części formalnej - model widzi
     całość notatek, więc wypełnia pola spójnie, a kod pilnuje, że do dokumentu trafią tylko pola z szablonu.
+    revision - zmienne poprawki po recenzji (build_revision_variables).
     """
     config = context.config
     variables = {
@@ -159,6 +185,7 @@ def ask_formal_values(
         "notes": build_notes_text(notes),
         "kb_files": build_editor_kb_text(config.paths.knowledge_base, plan.editor_kb_files),
     }
+    variables.update(revision)
     system_text, user_text = render_prompt(config.paths.prompts, "editor_formal", variables)
     odpowiedz = invoke_structured(
         context.models["editor"],
@@ -234,7 +261,7 @@ def render_formal(knowledge_base_dir: str, project_name: str, template_fields: l
 
 
 def create_formal_part(
-    project_map: ProjectMap, plan: Plan, notes: list[ModuleNote], context: RunContext
+    project_map: ProjectMap, plan: Plan, notes: list[ModuleNote], context: RunContext, revision: dict
 ) -> tuple[str, FormalSection, list[str]]:
     """Tworzy część formalną: wczytuje pola z formal_template.yaml, wypełnia pola source: llm modelem,
     pola source: scanner z mapy projektu, sprawdza braki i składa Markdown.
@@ -244,7 +271,7 @@ def create_formal_part(
     """
     knowledge_base_dir = context.config.paths.knowledge_base
     template_fields = load_formal_fields(knowledge_base_dir)
-    llm_values = ask_formal_values(template_fields, project_map, plan, notes, context)
+    llm_values = ask_formal_values(template_fields, project_map, plan, notes, context, revision)
     section, missing = assemble_formal_section(template_fields, llm_values, project_map)
     markdown = render_formal(knowledge_base_dir, project_map.project_name, template_fields, section)
 
@@ -282,7 +309,12 @@ def build_sections_text(sections: list[DescriptiveSection]) -> str:
 
 
 def ask_descriptive_part(
-    project_map: ProjectMap, plan: Plan, notes: list[ModuleNote], formal_markdown: str, context: RunContext
+    project_map: ProjectMap,
+    plan: Plan,
+    notes: list[ModuleNote],
+    formal_markdown: str,
+    context: RunContext,
+    revision: dict,
 ) -> DescriptivePart:
     """Wywołuje model agenta editor dla rozdziałów części opisowej z planu i zwraca jego odpowiedź (DescriptivePart).
 
@@ -298,6 +330,7 @@ def ask_descriptive_part(
         "notes": build_notes_text(notes),
         "kb_files": build_editor_kb_text(config.paths.knowledge_base, plan.editor_kb_files),
     }
+    variables.update(revision)
     system_text, user_text = render_prompt(config.paths.prompts, "editor_descriptive", variables)
     odpowiedz = invoke_structured(
         context.models["editor"],
@@ -351,14 +384,19 @@ def assemble_descriptive_part(
 
 
 def create_descriptive_part(
-    project_map: ProjectMap, plan: Plan, notes: list[ModuleNote], formal_markdown: str, context: RunContext
+    project_map: ProjectMap,
+    plan: Plan,
+    notes: list[ModuleNote],
+    formal_markdown: str,
+    context: RunContext,
+    revision: dict,
 ) -> tuple[str, DescriptivePart, list[str]]:
     """Tworzy część opisową: wywołuje model dla rozdziałów z planu, składa Markdown z nagłówkami i sprawdza
     wymagane rozdziały. Zwraca (Markdown części opisowej, odpowiedź modelu, lista brakujących wymaganych rozdziałów).
 
     Po co: cała logika części opisowej w jednej funkcji - użyje jej węzeł redaktora (krok 32) i test ręczny.
     """
-    part = ask_descriptive_part(project_map, plan, notes, formal_markdown, context)
+    part = ask_descriptive_part(project_map, plan, notes, formal_markdown, context, revision)
     required_titles = load_required_section_titles(context.config.paths.knowledge_base)
     markdown, missing = assemble_descriptive_part(plan.sections, part, required_titles)
 
@@ -400,28 +438,45 @@ def render_document(knowledge_base_dir: str, project_name: str, formal_markdown:
 # --- Cały etap redaktora i węzeł grafu ---
 
 
+def document_filename(round_number: int) -> str:
+    """Zwraca nazwę pliku dokumentu z danej rundy redakcji: document_01.md, document_02.md, ...
+
+    Po co: każda runda zostaje w output/ - widać, co poprawiła recenzja; dwie cyfry utrzymują kolejność plików.
+    """
+    nazwa_pliku = f"document_{round_number:02d}.md"
+    return nazwa_pliku
+
+
 def create_document(
-    project_map: ProjectMap, plan: Plan, notes: list[ModuleNote], context: RunContext
+    project_map: ProjectMap,
+    plan: Plan,
+    notes: list[ModuleNote],
+    context: RunContext,
+    round_number: int,
+    previous_document: str,
+    review_issues: list[str],
 ) -> tuple[str, list[str], list[str]]:
     """Wykonuje cały etap redaktora: część formalna i opisowa (dwa wywołania modelu), zapis ich wyników w output/,
-    złożenie dokumentu i zapis output/document.md. Zwraca (dokument, brakujące pola formalne,
-    brakujące rozdziały wymagane).
+    złożenie dokumentu i zapis output/document_NN.md (NN = round_number). Gdy review_issues nie są puste,
+    redaktor poprawia previous_document według uwag zamiast pisać od zera.
+    Zwraca (dokument, brakujące pola formalne, brakujące rozdziały wymagane).
 
     Po co: jedna funkcja dla węzła grafu i testu ręcznego - obie ścieżki robią dokładnie to samo
     i zostawiają te same pliki w output/.
     """
     run_store = context.run_store
-    formal_markdown, section, formal_missing = create_formal_part(project_map, plan, notes, context)
+    revision = build_revision_variables(previous_document, review_issues)
+    formal_markdown, section, formal_missing = create_formal_part(project_map, plan, notes, context, revision)
     save_formal_part(run_store, formal_markdown, section, formal_missing)
     descriptive_markdown, part, descriptive_missing = create_descriptive_part(
-        project_map, plan, notes, formal_markdown, context
+        project_map, plan, notes, formal_markdown, context, revision
     )
     save_descriptive_part(run_store, part, descriptive_missing)
 
     document = render_document(
         context.config.paths.knowledge_base, project_map.project_name, formal_markdown, descriptive_markdown
     )
-    run_store.save_text("document.md", document)
+    run_store.save_text(document_filename(round_number), document)
 
     wynik = (document, formal_missing, descriptive_missing)
     return wynik
@@ -430,12 +485,21 @@ def create_document(
 def editor_node(state: DocState, runtime: Runtime[RunContext]) -> dict:
     """Węzeł edit: tworzy dokument z mapy projektu, planu i notatek ze stanu i zwraca do stanu dokument
     oraz listę braków (nazwy brakujących pól formalnych i tytuły brakujących rozdziałów wymaganych).
+    Gdy w stanie jest już recenzja (powrót z węzła review), poprawia poprzedni dokument według jej uwag.
 
-    Po co: etap redaktora w grafie - uruchamia się raz, gdy wszyscy analitycy skończą. Lista braków
-    w stanie przyda się recenzentowi (krok 33).
+    Po co: etap redaktora w grafie - uruchamia się po wszystkich analitykach, a potem po każdej
+    odrzuconej recenzji. Numer rundy to liczba dotychczasowych recenzji + 1.
     """
+    round_number = 1
+    previous_document = ""
+    review_issues = []
+    if "review" in state:
+        round_number = state["review_round"] + 1
+        previous_document = state["document"]
+        review_issues = state["review"].issues
+
     document, formal_missing, descriptive_missing = create_document(
-        state["project_map"], state["plan"], state["notes"], runtime.context
+        state["project_map"], state["plan"], state["notes"], runtime.context, round_number, previous_document, review_issues
     )
 
     aktualizacja_stanu = {"document": document, "missing": formal_missing + descriptive_missing}
@@ -514,8 +578,8 @@ def manual_test() -> None:
     plan = run_store.load_json("plan.json", Plan)
     notes = load_notes(run_store)
 
-    document, formal_missing, descriptive_missing = create_document(project_map, plan, notes, context)
-    print_document(document, formal_missing, descriptive_missing, run_store.path("document.md"))
+    document, formal_missing, descriptive_missing = create_document(project_map, plan, notes, context, 1, "", [])
+    print_document(document, formal_missing, descriptive_missing, run_store.path(document_filename(1)))
 
 
 if __name__ == "__main__":

@@ -1,18 +1,22 @@
 """Graf LangGraph: kolejność etapów generowania dokumentacji.
 
 Co robi: build_graph() składa graf z węzłów i krawędzi, run_graph() uruchamia go dla projektu.
-Na tym etapie graf ma pięć węzłów:
-    START -> scan -> plan -> analyze (równolegle, po jednym na zadanie z planu) -> edit -> finalize -> END
+Graf ma sześć węzłów:
+    START -> scan -> plan -> analyze (równolegle, po jednym na zadanie z planu) -> edit -> review
+    review -> finalize -> END   (dokument zaakceptowany albo osiągnięty limit recenzji)
+    review -> edit              (dokument odrzucony - redaktor poprawia go według uwag)
     - scan buduje mapę projektu (scanner.build_project_map), zapisuje ją do output/project_map.json
       i dopisuje do stanu,
     - plan (agent planner, doc_agents/agents/planner.py) na podstawie mapy tworzy plan pracy zespołu,
       zapisuje go do output/plan.json i dopisuje do stanu,
     - analyze (agent analityk, doc_agents/agents/analyst.py) analizuje jedną jednostkę kodu, zapisuje
       notatkę w output/notes/ i dokleja ją do listy notes w stanie,
-    - edit (agent redaktor, doc_agents/agents/editor.py) uruchamia się raz, gdy wszyscy analitycy skończą:
-      składa część formalną i opisową w dokument (output/document.md) i oddaje do stanu dokument i braki,
-    - finalize zapisuje dokument końcowy w output/final.md.
-Kolejny krok doda recenzenta między edit a finalize (z powrotem do edit, gdy dokument wymaga poprawek).
+    - edit (agent redaktor, doc_agents/agents/editor.py) uruchamia się, gdy wszyscy analitycy skończą,
+      i po każdej odrzuconej recenzji: składa (albo poprawia) dokument (output/document_NN.md)
+      i oddaje do stanu dokument i braki,
+    - review (agent recenzent, doc_agents/agents/reviewer.py) ocenia dokument (output/review_NN.json)
+      i ustala review_done,
+    - finalize zapisuje ostatnią wersję dokumentu w output/final.md.
 
 Równoległość (Send): po węźle plan funkcja dispatch_analysts() zwraca listę Send("analyze", dane) -
 po jednym na zadanie z planu. LangGraph uruchamia wtedy węzeł analyze tyle razy, ile jest zadań,
@@ -42,6 +46,7 @@ from langgraph.types import Send
 from doc_agents.agents.analyst import analyst_node
 from doc_agents.agents.editor import editor_node
 from doc_agents.agents.planner import planner_node
+from doc_agents.agents.reviewer import reviewer_node
 from doc_agents.config import load_config
 from doc_agents.context import RunContext, create_run_context
 from doc_agents.scanner import build_project_map
@@ -68,14 +73,26 @@ def scan_node(state: DocState, runtime: Runtime[RunContext]) -> dict:
 def finalize_node(state: DocState, runtime: Runtime[RunContext]) -> dict:
     """Węzeł finalize: zapisuje dokument ze stanu jako output/final.md.
 
-    Po co: jedno, stałe miejsce wyniku końcowego. document.md to wersja robocza z ostatniego przebiegu
-    redaktora; po dodaniu recenzenta (krok 34) do final.md trafi tylko wersja zaakceptowana.
-    Węzeł nie zmienia stanu.
+    Po co: jedno, stałe miejsce wyniku końcowego - ostatnia wersja po pętli recenzji (zaakceptowana
+    albo ostatnia przed limitem). Wersje robocze to document_NN.md. Węzeł nie zmienia stanu.
     """
     runtime.context.run_store.save_text("final.md", state["document"])
 
     aktualizacja_stanu = {}
     return aktualizacja_stanu
+
+
+def route_after_review(state: DocState) -> str:
+    """Zwraca nazwę następnego węzła po recenzji: "finalize", gdy pętla recenzji się zakończyła
+    (review_done), inaczej "edit" - redaktor poprawia dokument według uwag.
+
+    Po co: krawędź warunkowa pętli recenzji. Decyzję (akceptacja albo limit rund) liczy węzeł review;
+    tu ją tylko odczytujemy.
+    """
+    nastepny_wezel = "edit"
+    if state["review_done"]:
+        nastepny_wezel = "finalize"
+    return nastepny_wezel
 
 
 def dispatch_analysts(state: DocState) -> list[Send]:
@@ -96,9 +113,9 @@ def dispatch_analysts(state: DocState) -> list[Send]:
 
 
 def build_graph():
-    """Składa i kompiluje graf: START -> scan -> plan -> analyze (×N, równolegle) -> edit -> finalize -> END,
-    ze stanem DocState i kontekstem RunContext. Krawędź analyze -> edit uruchamia edit raz,
-    po zakończeniu wszystkich równoległych analityków.
+    """Składa i kompiluje graf: START -> scan -> plan -> analyze (×N, równolegle) -> edit -> review,
+    a po review: finalize -> END albo powrót do edit (pętla recenzji). Stan DocState, kontekst RunContext.
+    Krawędź analyze -> edit uruchamia edit raz, po zakończeniu wszystkich równoległych analityków.
 
     Po co: jedno miejsce, w którym widać wszystkie etapy i ich kolejność; kolejne węzły
     dopisuje się tutaj. compile() sprawdza poprawność grafu (np. brakujące krawędzie)
@@ -109,12 +126,14 @@ def build_graph():
     graph_builder.add_node("plan", planner_node)
     graph_builder.add_node("analyze", analyst_node)
     graph_builder.add_node("edit", editor_node)
+    graph_builder.add_node("review", reviewer_node)
     graph_builder.add_node("finalize", finalize_node)
     graph_builder.add_edge(START, "scan")
     graph_builder.add_edge("scan", "plan")
     graph_builder.add_conditional_edges("plan", dispatch_analysts, ["analyze"])
     graph_builder.add_edge("analyze", "edit")
-    graph_builder.add_edge("edit", "finalize")
+    graph_builder.add_edge("edit", "review")
+    graph_builder.add_conditional_edges("review", route_after_review, ["edit", "finalize"])
     graph_builder.add_edge("finalize", END)
 
     skompilowany_graf = graph_builder.compile()
@@ -169,6 +188,7 @@ def print_final_state(state: DocState) -> None:
         print(f"  {note.unit_name}: {len(note.process_steps)} kroków procesu")
     print(f"document: {len(state['document'].splitlines())} linii")
     print(f"missing: {state['missing']}")
+    print(f"recenzje: {state['review_round']}, zaakceptowany: {state['review'].approved}, problemy: {len(state['review'].issues)}")
 
 
 # --- Test ręczny ---

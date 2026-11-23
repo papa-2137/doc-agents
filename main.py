@@ -4,8 +4,9 @@ Co robi: wczytuje argumenty i config.yaml, przygotowuje kontekst uruchomienia (R
 i uruchamia graf LangGraph (doc_agents/graph.py), a na końcu wypisuje podsumowanie ze stanu
 końcowego grafu. Na tym etapie graf skanuje projekt (bez modelu językowego, wynik:
 output/project_map.json), tworzy plan pracy zespołu (agent planner, wynik: output/plan.json)
-równolegle analizuje jednostki kodu (analitycy, wyniki: output/notes/) i składa dokumentację
-(redaktor, wynik końcowy: output/final.md); recenzent dojdzie jako kolejny węzeł grafu.
+równolegle analizuje jednostki kodu (analitycy, wyniki: output/notes/), składa dokumentację (redaktor,
+output/document_NN.md) i recenzuje ją (recenzent, output/review_NN.json) - odrzucony dokument wraca
+do redaktora, najwyżej limits.max_review_rounds razy. Wynik końcowy: output/final.md.
 
 Uruchomienie z katalogu repo:
     python main.py --project <ścieżka do projektu>
@@ -22,7 +23,7 @@ import os
 from doc_agents.config import load_config
 from doc_agents.context import create_run_context
 from doc_agents.graph import run_graph
-from doc_agents.schemas import Plan, ProjectMap
+from doc_agents.schemas import Plan, ProjectMap, ReviewResult
 
 
 # --- Wyświetlanie ---
@@ -37,11 +38,14 @@ def print_summary(
     notes_count: int,
     notes_dir: str,
     missing: list[str],
+    review: ReviewResult,
+    review_round: int,
     final_path: str,
 ) -> None:
     """Wypisuje podsumowanie przebiegu: plik configu, projekt, technologię, liczbę plików, punkty wejścia,
     jednostki kodu do analizy, ścieżkę mapy projektu, skrót planu (zadania, rozdziały) i ścieżkę planu
-    liczbę notatek analityków i ich katalog oraz braki w dokumencie i ścieżkę dokumentu końcowego.
+    liczbę notatek analityków i ich katalog, braki w dokumencie, wynik recenzji (liczba rund, decyzja,
+    nierozwiązane problemy) i ścieżkę dokumentu końcowego.
 
     Po co: na obecnym etapie to widoczny efekt uruchomienia main.py - od razu widać, czy projekt
     został rozpoznany i jak planner zaplanował pracę, a szczegóły są w project_map.json i plan.json.
@@ -73,6 +77,14 @@ def print_summary(
         print("    brak")
     for name in missing:
         print(f"    {name}")
+    decyzja = "nie zaakceptowany (osiągnięto limit recenzji)"
+    if review.approved:
+        decyzja = "zaakceptowany"
+    print(f"  recenzja: {review_round} rund(y), dokument {decyzja}")
+    if not review.approved:
+        print("  nierozwiązane uwagi recenzenta (szczegóły w output/review_NN.json):")
+        for issue in review.issues:
+            print(f"    - {issue}")
     print(f"  DOKUMENTACJA:  {final_path}")
 
 
@@ -100,8 +112,8 @@ def parse_args():
 def main():
     """Uruchamia program: argumenty -> config -> kontekst uruchomienia -> graf -> podsumowanie ze stanu końcowego.
 
-    Po co: spis treści całego przebiegu. Etapy (skan, planner, analitycy, redaktor, a dalej
-    recenzent) są węzłami grafu w doc_agents/graph.py i same zapisują swoje wyniki w output/ -
+    Po co: spis treści całego przebiegu. Etapy (skan, planner, analitycy, redaktor, recenzent)
+    są węzłami grafu w doc_agents/graph.py i same zapisują swoje wyniki w output/ -
     tu tylko uruchamiamy graf i pokazujemy, co powstało.
     """
     args = parse_args()
@@ -123,6 +135,8 @@ def main():
         len(final_state["notes"]),
         notes_dir,
         final_state["missing"],
+        final_state["review"],
+        final_state["review_round"],
         final_path,
     )
 

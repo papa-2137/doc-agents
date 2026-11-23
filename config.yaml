@@ -20,7 +20,7 @@ llm:
   agents:
     planner: small
     analyst: small
-    editor: small
+    editor: medium
     reviewer: medium
 
 paths:
@@ -73,3 +73,9 @@ analysis:
   # Ile wywołań modelu może działać naraz (analitycy pracują równolegle - po jednym na jednostkę kodu).
   # Zmniejsz, gdy bramka modelu odrzuca zapytania limitem; zwiększ, żeby przyspieszyć duże projekty.
   max_concurrency: 5
+
+limits:
+  # Najwyższa liczba recenzji dokumentu. Po każdej odrzuconej recenzji redaktor poprawia dokument według uwag;
+  # po tylu recenzjach do final.md trafia ostatnia wersja, nawet bez akceptacji (uwagi zostają w output/review_NN.json).
+  # Jedna runda poprawek = 2 wywołania redaktora + 1 wywołanie recenzenta.
+  max_review_rounds: 3

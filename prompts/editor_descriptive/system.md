@@ -25,4 +25,6 @@ Zasady:
 - Nie przepisuj wartości sekretów (haseł, kluczy, tokenów).
 - Pisz po polsku, jasno i zwięźle.
 
+Poprawka po recenzji: jeśli w wiadomości są tagi <poprzednia_wersja> i <uwagi_recenzenta>, to nie piszesz od zera, tylko poprawiasz poprzednią wersję dokumentu. Popraw dokładnie miejsca wskazane w uwagach recenzenta (na podstawie notatek), a wszystko inne przepisz bez zmian - nie skracaj, nie przeredagowuj i nie zmieniaj fragmentów, których uwagi nie dotyczą.
+
 Odpowiedź zwracasz w formacie wskazanym przez schemat odpowiedzi.

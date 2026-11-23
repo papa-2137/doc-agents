@@ -37,7 +37,8 @@ fields:
     source: llm
     instruction: >
       Wymień źródła danych wejściowych (pliki, kolejki, systemy) z lokalizacją lub nazwą parametru konfiguracji,
-      skąd robot je bierze, i krótko opisz ich zawartość.
+      skąd robot je bierze, i krótko opisz ich zawartość. Tylko dane, które robot przetwarza - bez haseł,
+      kluczy i zmiennych środowiskowych (te są w polu „Dostępy i hasła”).
 
   - name: wyniki
     title: Wyniki i dane wyjściowe
@@ -45,8 +46,9 @@ fields:
     required: true
     source: llm
     instruction: >
-      Wymień, co robot zostawia po sobie: zmiany w systemach, pliki wynikowe, raporty, wpisy w bazie.
-      Podaj lokalizację lub nazwę parametru konfiguracji.
+      Wymień, co robot zostawia po sobie: zmiany w systemach, pliki wynikowe, raporty, wpisy w bazie, logi.
+      Podaj lokalizację lub nazwę parametru konfiguracji i krótko format. To jedyne miejsce w części formalnej
+      z opisem raportów i logów.
 
   - name: punkty_wejscia
     title: Punkty wejścia
@@ -62,7 +64,9 @@ fields:
     source: llm
     instruction: >
       Opisz, jak uruchomić robota (polecenie, parametry) i co musi być przygotowane wcześniej:
-      wersja Pythona, biblioteki, przeglądarka i sterownik, zmienne środowiskowe, dostępy.
+      wersja Pythona, biblioteki, przeglądarka i sterownik, dostęp sieciowy. Hasła, klucze i zmienne
+      środowiskowe z nimi zastąp jednym punktem z odesłaniem do pola „Dostępy i hasła”. Pliku danych
+      wejściowych nie opisuj ponownie - odeślij do pola „Dane wejściowe”.
 
   - name: konfiguracja
     title: Pliki konfiguracyjne
@@ -94,5 +98,8 @@ fields:
     required: true
     source: llm
     instruction: >
-      Opisz, jak robot reaguje na błędy (błędy biznesowe i techniczne, ponowienia, pominięcie elementu,
-      zatrzymanie) oraz gdzie zapisuje logi i raport z przebiegu.
+      W 2-4 zdaniach podaj ogólną zasadę reakcji na błędy: co dzieje się z elementem, przy którym wystąpił
+      błąd (np. wpis w raporcie, ponowienie, pominięcie), i kiedy robot się zatrzymuje. Nie wymieniaj
+      poszczególnych przypadków błędów - są opisane krok po kroku jako ścieżki alternatywne w rozdziale
+      „Ścieżki procesu krok po kroku”; odeślij do niego. Lokalizacji i formatu logów oraz raportu nie
+      powtarzaj - odeślij do pola „Wyniki i dane wyjściowe”.

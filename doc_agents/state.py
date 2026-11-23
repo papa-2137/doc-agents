@@ -1,8 +1,9 @@
 """Stan grafu (DocState): dane, które węzły grafu czytają i uzupełniają w trakcie przebiegu.
 
 Co zawiera: na tym etapie ścieżkę dokumentowanego projektu (wejście grafu), mapę projektu
-(wynik węzła scan), plan (wynik węzła plan), notatki analityków (wynik węzłów analyze) oraz dokument
-i listę braków (wynik węzła edit). Kolejne kroki dopiszą tu uwagi recenzenta.
+(wynik węzła scan), plan (wynik węzła plan), notatki analityków (wynik węzłów analyze), dokument
+i listę braków (wynik węzła edit) oraz wynik ostatniej recenzji, licznik recenzji i decyzję, czy pętla
+recenzji się zakończyła (wynik węzła review). W pierwszej rundzie redakcji pól recenzji jeszcze nie ma.
 
 Pole notes ma reducer operator.add (zapis Annotated[..., operator.add]): analitycy działają
 równolegle i każdy zwraca {"notes": [swoja_notatka]}. Bez reducera kolejne wyniki nadpisywałyby
@@ -26,7 +27,7 @@ Moduł zawiera tylko opis typu - nie ma czego testować osobno; stan sprawdza te
 import operator
 from typing import Annotated, TypedDict
 
-from doc_agents.schemas import AnalysisTask, ModuleNote, Plan, ProjectMap
+from doc_agents.schemas import AnalysisTask, ModuleNote, Plan, ProjectMap, ReviewResult
 
 
 class DocState(TypedDict):
@@ -38,6 +39,9 @@ class DocState(TypedDict):
     notes: Annotated[list[ModuleNote], operator.add]  # notatki analityków - doklejane z równoległych węzłów analyze
     document: str  # cały dokument w Markdown - wynik węzła edit
     missing: list[str]  # brakujące pola formalne (nazwy) i rozdziały wymagane (tytuły) - wynik węzła edit
+    review: ReviewResult  # wynik ostatniej recenzji - wynik węzła review
+    review_round: int  # liczba wykonanych recenzji (1, 2, ...) - wynik węzła review
+    review_done: bool  # True: dokument zaakceptowany albo osiągnięto limit recenzji - idziemy do finalize
 
 
 class AnalystInput(TypedDict):
