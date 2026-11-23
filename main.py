@@ -1,8 +1,10 @@
 """Punkt wejścia doc-agents.
 
-Co robi: wczytuje argumenty i config.yaml, skanuje wskazany projekt (bez modelu językowego),
-zapisuje mapę projektu do output/project_map.json i wypisuje podsumowanie. Docelowo w tym
-miejscu uruchomi się graf agentów generujący dokumentację.
+Co robi: wczytuje argumenty i config.yaml, przygotowuje kontekst uruchomienia (RunContext)
+i uruchamia graf LangGraph (doc_agents/graph.py), a na końcu wypisuje podsumowanie ze stanu
+końcowego grafu. Na tym etapie graf tylko skanuje projekt (bez modelu językowego) i zapisuje
+mapę do output/project_map.json; kolejne etapy (agenci) dochodzą jako węzły grafu, bez zmian
+w tym pliku.
 
 Uruchomienie z katalogu repo:
     python main.py --project <ścieżka do projektu>
@@ -17,8 +19,8 @@ import argparse
 import os
 
 from doc_agents.config import load_config
-from doc_agents.output import create_run_store
-from doc_agents.scanner import build_project_map
+from doc_agents.context import create_run_context
+from doc_agents.graph import run_graph
 from doc_agents.schemas import ProjectMap
 
 
@@ -72,19 +74,20 @@ def parse_args():
 
 
 def main():
-    """Uruchamia program: argumenty -> config -> skan projektu -> zapis project_map.json -> podsumowanie.
+    """Uruchamia program: argumenty -> config -> kontekst uruchomienia -> graf -> podsumowanie ze stanu końcowego.
 
-    Po co: spis treści całego przebiegu - tu będą dochodzić kolejne etapy (planner, analitycy,
-    redaktor, recenzent), a szczegóły każdego z nich zostają w osobnych funkcjach i modułach.
+    Po co: spis treści całego przebiegu. Etapy (skan, a dalej planner, analitycy, redaktor,
+    recenzent) są węzłami grafu w doc_agents/graph.py i same zapisują swoje wyniki w output/ -
+    tu tylko uruchamiamy graf i pokazujemy, co powstało.
     """
     args = parse_args()
     config = load_config(args.config)
 
-    project_map = build_project_map(args.project, config.scan)
-    run_store = create_run_store()
-    map_path = run_store.save_json("project_map.json", project_map)
+    context = create_run_context(config)
+    final_state = run_graph(args.project, context)
+    map_path = context.run_store.path("project_map.json")
 
-    print_summary(args.config, project_map, map_path)
+    print_summary(args.config, final_state["project_map"], map_path)
 
 
 if __name__ == "__main__":
