@@ -8,7 +8,7 @@ llm:
       model: claude-haiku-5-5
       api_key_env: LLM_API_KEY
       base_url_env: LLM_BASE_URL
-      structured_output_method: function_calling
+      structured_output_method: json_schema   # function_calling nie wymusza schematu - przy długich odpowiedziach model gubił format
       params: { max_tokens: 16000 }
     medium:
       provider: openai_compatible
@@ -16,7 +16,7 @@ llm:
       api_key_env: LLM_API_KEY
       base_url_env: LLM_BASE_URL
       structured_output_method: json_schema   # ustalone przez probe_llm: ten model odrzuca wymuszony tool_choice
-      params: { max_tokens: 16000 }
+      params: { max_tokens: 32000 }   # część opisowa redaktora potrafi przekroczyć 16000 (płaci się tylko za wygenerowane tokeny)
   agents:
     planner: small
     analyst: small

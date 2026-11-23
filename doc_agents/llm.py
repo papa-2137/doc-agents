@@ -26,6 +26,7 @@ import time
 from langchain_core.language_models import BaseChatModel
 from langchain_core.messages import BaseMessage
 from langchain_openai import ChatOpenAI
+from openai import LengthFinishReasonError
 from pydantic import BaseModel
 
 from doc_agents.config import AppConfig, LLMProfile, load_config
@@ -128,6 +129,8 @@ def invoke_structured(
     Odpowiedzi uciętej na limicie (finish_reason=length) nie ponawiamy - przy tym samym limicie
     skończyłaby się tak samo; trzeba zwiększyć max_tokens. include_raw=True daje dostęp do surowej
     odpowiedzi modelu, z której odczytujemy przyczynę. Jedno miejsce dla wszystkich agentów.
+    Przy metodzie json_schema uciętą odpowiedź zgłasza sama biblioteka openai (LengthFinishReasonError,
+    zanim dostaniemy wynik) - zamieniamy go na RuntimeError z komunikatem z build_length_error_message().
     Argumenty: method - metoda structured output z profilu (get_structured_output_method).
     """
     model_ze_schematem = model.with_structured_output(schema, method=method, include_raw=True)
@@ -135,7 +138,11 @@ def invoke_structured(
     numer_proby = 0
     while True:
         numer_proby += 1
-        wynik = model_ze_schematem.invoke(messages)
+        try:
+            wynik = model_ze_schematem.invoke(messages)
+        except LengthFinishReasonError as blad_limitu:
+            komunikat_bledu = build_length_error_message(schema.__name__, numer_proby, blad_limitu.completion)
+            raise RuntimeError(komunikat_bledu) from blad_limitu
         if wynik["parsed"] is not None:
             break
 
@@ -154,6 +161,28 @@ def invoke_structured(
 
     odpowiedz = wynik["parsed"]
     return odpowiedz
+
+
+def build_length_error_message(schema_name: str, attempt: int, completion) -> str:
+    """Zwraca komunikat błędu dla odpowiedzi uciętej na limicie max_tokens: schemat, numer próby,
+    zużycie tokenów, podpowiedź o max_tokens i ostatnie 300 znaków uciętej odpowiedzi.
+
+    Po co: komunikat biblioteki openai (LengthFinishReasonError) podaje tylko liczby tokenów. Końcówka
+    odpowiedzi pokazuje przyczynę: powtarzający się fragment oznacza, że model się zapętlił (większy
+    limit nie pomoże), zwykły tekst - że odpowiedź jest po prostu dłuższa niż limit (pomoże większy
+    max_tokens albo krótsze części dokumentu).
+    Argumenty: completion - ChatCompletion z wyjątku (pole completion).
+    """
+    tresc = ""
+    if len(completion.choices) > 0 and completion.choices[0].message.content is not None:
+        tresc = completion.choices[0].message.content
+    koncowka = tresc[-300:]
+    komunikat = (
+        f"Odpowiedź modelu ucięta na limicie max_tokens - schemat {schema_name} (próba {attempt}). "
+        f"tokeny={completion.usage}. Zwiększ max_tokens w profilu modelu w config.yaml. "
+        f"Końcówka uciętej odpowiedzi (powtarzający się fragment = model się zapętlił): ...{koncowka}"
+    )
+    return komunikat
 
 
 # --- Test ręczny ---

@@ -22,8 +22,13 @@ Równoległość (Send): po węźle plan funkcja dispatch_analysts() zwraca list
 po jednym na zadanie z planu. LangGraph uruchamia wtedy węzeł analyze tyle razy, ile jest zadań,
 równolegle, a każde wywołanie dostaje tylko swoje dane (AnalystInput w state.py). Wyniki łączy
 reducer pola notes. Liczbę równoczesnych wywołań ogranicza analysis.max_concurrency z config.yaml
-(przekazywane w invoke jako max_concurrency).
+(przekazywane przy uruchomieniu jako max_concurrency).
 Węzły agentów leżą w doc_agents/agents/ (każdy agent w osobnym pliku) - tu tylko je łączymy.
+
+Postęp na ekranie: run_graph() uruchamia graf przez stream(stream_mode=["tasks", "values"]) zamiast invoke().
+Tryb "tasks" zgłasza start i koniec każdego wywołania węzła (z danymi wejściowymi, wynikiem albo błędem),
+z tego powstaje jedna linia postępu na zdarzenie (godzina, agent, czas trwania, krótki wynik).
+Tryb "values" oddaje stan po każdym kroku - ostatni to stan końcowy. Agenci nic nie wypisują sami.
 
 Jak czytać graf:
     - węzeł = zwykła funkcja (state, runtime) -> dict: czyta stan, zwraca tylko zmienione pola,
@@ -38,6 +43,8 @@ Test ręczny z katalogu repo (uruchamia graf i wypisuje stan końcowy; wymaga LL
 
 import os
 import sys
+import time
+from datetime import datetime
 
 from langgraph.graph import END, START, StateGraph
 from langgraph.runtime import Runtime
@@ -141,19 +148,132 @@ def build_graph():
 
 
 def run_graph(project_path: str, context: RunContext) -> DocState:
-    """Uruchamia graf dla projektu i zwraca stan końcowy.
+    """Uruchamia graf dla projektu, w trakcie wypisuje postęp (start i koniec każdego etapu) i zwraca stan końcowy.
 
     Po co: punkt wejścia do całego przebiegu dla main.py i testów. Stan startowy zawiera
     tylko ścieżkę projektu (bezwzględną), resztę uzupełniają węzły. max_concurrency z configu
     ogranicza liczbę równocześnie działających węzłów (analityków wołających model).
+    Postęp: przebieg trwa kilka minut, a pojedyncze wywołanie modelu nawet ponad minutę - linie
+    postępu pokazują, który etap trwa, więc widać, że program pracuje, a nie stoi.
     """
     stan_poczatkowy = {"project_path": os.path.abspath(project_path)}
     ustawienia_przebiegu = {"max_concurrency": context.config.analysis.max_concurrency}
-    stan_koncowy = build_graph().invoke(stan_poczatkowy, config=ustawienia_przebiegu, context=context)
+    zdarzenia = build_graph().stream(
+        stan_poczatkowy, config=ustawienia_przebiegu, context=context, stream_mode=["tasks", "values"]
+    )
+    rozpoczete_zadania = {}
+    stan_koncowy = {}
+    for tryb, dane in zdarzenia:
+        if tryb == "values":
+            stan_koncowy = dane
+        else:
+            linia_postepu = build_progress_line(dane, rozpoczete_zadania)
+            print_progress(linia_postepu)
     return stan_koncowy
 
 
+# --- Postęp ---
+
+
+def describe_task(node_name: str, node_input: dict) -> str:
+    """Zwraca krótki opis wywołania węzła do linii postępu, np. "analityk src/report.py" albo "redaktor, runda 2".
+
+    Po co: sama nazwa węzła ("analyze") nie mówi, którą jednostkę kodu analizuje dane wywołanie
+    ani która to runda recenzji. Dane wejściowe: dla analyze - AnalystInput, dla pozostałych - stan.
+    Runda redaktora i recenzenta = liczba dotychczasowych recenzji + 1 (review_round w stanie).
+    """
+    runda = node_input.get("review_round", 0) + 1
+    opis = node_name
+    if node_name == "scan":
+        opis = "skan projektu"
+    elif node_name == "plan":
+        opis = "planner"
+    elif node_name == "analyze":
+        opis = f"analityk {node_input['task'].unit_name}"
+    elif node_name == "edit":
+        opis = f"redaktor, runda {runda}"
+    elif node_name == "review":
+        opis = f"recenzent, runda {runda}"
+    elif node_name == "finalize":
+        opis = "zapis final.md"
+    return opis
+
+
+def describe_result(node_name: str, node_result: dict) -> str:
+    """Zwraca krótki opis wyniku węzła do linii postępu (np. "odrzucony, uwagi: 2") albo "", gdy nie ma czego pokazać.
+
+    Po co: przy planie, redaktorze i recenzencie od razu widać, co z etapu wyszło (liczba zadań,
+    braki, decyzja recenzenta) - bez czekania na podsumowanie na końcu przebiegu.
+    node_result to pola stanu zwrócone przez węzeł.
+    """
+    opis_wyniku = ""
+    if node_name == "plan":
+        opis_wyniku = f"zadań analityków: {len(node_result['plan'].tasks)}"
+    elif node_name == "edit":
+        opis_wyniku = f"braki: {len(node_result['missing'])}"
+    elif node_name == "review":
+        review = node_result["review"]
+        if review.approved:
+            opis_wyniku = "zaakceptowany"
+        else:
+            opis_wyniku = f"odrzucony, uwagi: {len(review.issues)}"
+    return opis_wyniku
+
+
+def format_duration(seconds: float) -> str:
+    """Zwraca czas trwania w czytelnej postaci: "17 s" albo "1 min 47 s".
+
+    Po co: czasy etapów w linii postępu - przy wywołaniach modelu liczą się sekundy i minuty.
+    """
+    pelne_sekundy = int(round(seconds))
+    czas = f"{pelne_sekundy} s"
+    if pelne_sekundy >= 60:
+        czas = f"{pelne_sekundy // 60} min {pelne_sekundy % 60} s"
+    return czas
+
+
+def build_progress_line(task_event: dict, started_tasks: dict) -> str:
+    """Zwraca linię postępu dla zdarzenia trybu "tasks": start albo koniec (lub błąd) wywołania węzła.
+
+    Po co: zamienia surowe zdarzenie LangGraph na jedną czytelną linię z godziną. Zdarzenie startu
+    ma klucz "input"; zdarzenie końca ma "result" i "error" i to samo "id" co start.
+    started_tasks (id -> (czas startu, opis)) jest uzupełniany przy starcie i opróżniany przy końcu -
+    stąd czas trwania i opis przy końcu. Uwaga: przy większej liczbie analityków niż max_concurrency
+    LangGraph zgłasza start wszystkich naraz, więc czas części z nich obejmuje też czekanie w kolejce.
+    """
+    godzina = datetime.now().strftime("%H:%M:%S")
+    zadanie_id = task_event["id"]
+    nazwa_wezla = task_event["name"]
+    if "input" in task_event:
+        opis = describe_task(nazwa_wezla, task_event["input"])
+        started_tasks[zadanie_id] = (time.monotonic(), opis)
+        linia = f"[{godzina}] start   {opis}"
+        return linia
+
+    czas_startu, opis = started_tasks.pop(zadanie_id, (time.monotonic(), nazwa_wezla))
+    czas_trwania = format_duration(time.monotonic() - czas_startu)
+    blad = task_event["error"]
+    if blad is not None:
+        linia = f"[{godzina}] BŁĄD    {opis} ({czas_trwania}) - {type(blad).__name__}: {blad}"
+        return linia
+
+    linia = f"[{godzina}] koniec  {opis} ({czas_trwania})"
+    opis_wyniku = describe_result(nazwa_wezla, task_event["result"])
+    if opis_wyniku != "":
+        linia = f"{linia} - {opis_wyniku}"
+    return linia
+
+
 # --- Wyświetlanie ---
+
+
+def print_progress(line: str) -> None:
+    """Wypisuje jedną linię postępu przebiegu i od razu ją pokazuje (flush).
+
+    Po co: bez flush konsola może buforować wydruk i linie pojawiałyby się z opóźnieniem,
+    co psułoby cały sens podglądu postępu.
+    """
+    print(line, flush=True)
 
 
 def print_final_state(state: DocState) -> None:

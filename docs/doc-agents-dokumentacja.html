@@ -1,0 +1,1231 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Doc-Agents dla dewelopera</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;600;800&display=swap" rel="stylesheet">
+<style>
+/* VOICE work, minimal technical drawing: white paper, black hairlines, red only for loops and warnings
+   IDEA a set of engineering sheets for one codebase: map, flow, recipes, field guide
+   PICTURE structure tree with hover cards; overview graph plus step-by-step flow (reads / node / writes); numbered recipe roads
+   COLOUR white, ink #111, grey #6f6f6f, hairline #d6d6d6, signal red #e4002b
+   TYPE Archivo 800 headings, Archivo text, monospace for code names
+   LAYOUT laptop: sticky sidebar with tabs, content up to 1120px; phone: tabs as a top bar, diagrams stack vertically */
+:root{color-scheme:light;--bg:#fff;--ink:#111;--mute:#6f6f6f;--hair:#d6d6d6;--red:#e4002b;--mono:Consolas,"Cascadia Mono","Courier New",monospace}
+*{box-sizing:border-box;min-width:0}
+html{scroll-padding-top:24px}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.55 Archivo,Arial,sans-serif;display:grid;grid-template-columns:260px minmax(0,1fr);min-height:100vh;overflow-x:clip}
+aside{position:sticky;top:0;height:100vh;overflow-y:auto;border-right:1px solid var(--hair);padding:28px 20px}
+aside .brand{font-weight:800;font-size:22px;letter-spacing:-.02em;line-height:1.1}
+aside .sub{font-size:14px;color:var(--mute);margin:4px 0 24px}
+nav a{display:flex;align-items:center;gap:10px;min-height:44px;padding:6px 10px;color:var(--ink);text-decoration:none;border-radius:3px;font-weight:600;font-size:15px}
+nav a i{flex:none;width:12px;height:12px;border:1.5px solid var(--ink);border-radius:50%}
+nav a:hover{background:#f3f3f3}
+nav a[aria-current=page]{background:var(--ink);color:var(--bg)}
+nav a[aria-current=page] i{border-color:var(--bg);background:var(--bg)}
+nav .subnav{margin:2px 0 8px 32px;border-left:1.5px solid var(--hair)}
+nav .subnav a{min-height:34px;font-weight:400;font-size:14px;padding:4px 12px;color:var(--mute)}
+nav .subnav a:hover{color:var(--ink)}
+aside .meta{margin-top:28px;font-size:13px;color:var(--mute)}
+main{padding:clamp(24px,4vw,56px) max(4vw,16px) 80px}
+.tab{max-width:1120px}
+h1,h2,h3{font-weight:800;line-height:1.08;letter-spacing:-.02em;margin:0;text-wrap:balance}
+h1{font-size:clamp(32px,4vw,48px);max-width:22ch}
+h2{font-size:clamp(24px,2.6vw,32px);margin:56px 0 14px;max-width:30ch}
+h3{font-size:18px;margin:0 0 6px;letter-spacing:-.01em}
+p{margin:0 0 12px;max-width:72ch}
+.lead{font-size:clamp(17px,1.6vw,20px);color:var(--mute);margin:12px 0 28px;max-width:62ch}
+.note{font-size:14px;color:var(--mute)}
+code,.mono{font-family:var(--mono);font-size:.92em;overflow-wrap:anywhere}
+a{color:var(--ink)}
+.legend{display:flex;flex-wrap:wrap;gap:8px 22px;font-size:14px;color:var(--mute);margin:14px 0}
+.legend span{display:inline-flex;align-items:center;gap:8px}
+.mk{flex:none;display:inline-block;width:12px;height:12px;border:1.5px solid var(--ink);border-radius:2px;background:var(--bg)}
+.mk.ai{background:var(--ink)}
+.mk.cfg{transform:rotate(45deg);width:10px;height:10px;border-radius:0}
+.mk.gen{border-style:dashed;border-color:var(--mute)}
+.cols{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,300px),1fr));gap:20px}
+.box{border:1.5px solid var(--ink);padding:18px 20px}
+.box p:last-child{margin:0}
+table{border-collapse:collapse;width:100%;font-size:15px}
+th{text-align:left;font-size:14px;color:var(--mute);font-weight:600;padding:8px 10px;border-bottom:1.5px solid var(--ink);vertical-align:bottom}
+td{padding:10px;border-bottom:1px solid var(--hair);vertical-align:top}
+td:first-child,th:first-child{padding-left:0}
+.scroll{overflow-x:auto}
+.yes{font-weight:600}
+.warn{color:var(--red);font-weight:600}
+/* code blocks */
+.cb{position:relative;margin:10px 0 14px}
+pre{margin:0;border:1.5px solid var(--ink);padding:14px 16px;font:13.5px/1.5 var(--mono);overflow-x:auto;background:var(--bg)}
+.cp{position:absolute;top:6px;right:6px;font:600 13px Archivo,Arial,sans-serif;min-height:32px;padding:0 10px;border:1.5px solid var(--ink);background:var(--bg);border-radius:3px;cursor:pointer}
+.cp:hover{background:var(--ink);color:var(--bg)}
+.cp:focus-visible,.it:focus-visible,nav a:focus-visible{outline:3px solid var(--red);outline-offset:2px}
+/* overview io */
+.io{display:grid;grid-template-columns:minmax(0,1fr) 56px minmax(0,1.3fr) 56px minmax(0,1fr);align-items:center;margin:8px 0 8px}
+.io .ar{border-top:1.5px solid var(--ink);position:relative}
+.io .ar::after{content:"";position:absolute;right:-1px;top:-6px;border:5px solid transparent;border-left:8px solid var(--ink)}
+.io .core{background:var(--ink);color:var(--bg);padding:20px;border-radius:3px}
+.io .core b{font-size:20px;display:block}
+.io .core span{font-size:14px;opacity:.85}
+.gl{display:grid;grid-template-columns:max-content minmax(0,1fr);gap:0 24px;font-size:15px}
+.gl dt{font-weight:600;padding:9px 0;border-bottom:1px solid var(--hair)}
+.gl dd{margin:0;padding:9px 0;border-bottom:1px solid var(--hair)}
+.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,230px),1fr));gap:14px}
+.cards a{display:block;border:1.5px solid var(--ink);padding:16px 18px;text-decoration:none;min-height:44px}
+.cards a:hover{background:var(--ink);color:var(--bg)}
+.cards a b{display:block;font-size:17px;margin-bottom:4px}
+.cards a span{font-size:14px}
+/* structure */
+.map{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,320px),1fr));gap:20px;align-items:start}
+.grp{border:1.5px solid var(--ink);padding:14px 16px 10px}
+.grp.gen{border-style:dashed;border-color:var(--mute)}
+.tr{list-style:none;margin:6px 0 0 6px;padding:0 0 0 0;border-left:1.5px solid var(--ink)}
+.tr li{position:relative;padding:3px 0 3px 18px}
+.tr li::before{content:"";position:absolute;left:0;top:19px;width:12px;border-top:1.5px solid var(--ink)}
+.tr .tr{margin-left:10px}
+.tr>li:last-child::after{content:"";position:absolute;left:-2px;top:20px;bottom:0;border-left:3px solid var(--bg)}
+.it{display:inline-flex;align-items:center;gap:8px;font:14px/1.3 var(--mono);color:var(--ink);background:var(--bg);border:1.5px solid transparent;border-radius:3px;padding:6px 8px;cursor:help;text-align:left;min-height:32px}
+.it:hover,.it.on{border-color:var(--ink)}
+.it.dir{font-weight:700}
+.it small{font:13px Archivo,Arial,sans-serif;color:var(--mute)}
+#tip{position:fixed;z-index:20;max-width:min(380px,calc(100vw - 24px));background:var(--bg);border:1.5px solid var(--ink);padding:14px 16px;font-size:14px;line-height:1.45;pointer-events:none}
+#tip b{display:block;font:700 15px var(--mono);margin-bottom:8px;overflow-wrap:anywhere}
+#tip p{margin:0 0 8px}
+#tip p:last-child{margin:0}
+#tip p span{display:block;font-size:13px;color:var(--mute)}
+#tip.pin{pointer-events:auto;outline:3px solid var(--red);outline-offset:-1px}
+/* overview graph */
+.fig{position:relative;height:290px;margin:10px 0}
+.fig>svg{position:absolute;inset:0;width:100%;height:100%}
+svg text{font-family:Archivo,Arial,sans-serif;dominant-baseline:central;text-anchor:middle}
+.nai{fill:var(--ink);stroke:var(--ink);stroke-width:1.5}
+.ncode{fill:var(--bg);stroke:var(--ink);stroke-width:1.5}
+.tai{fill:var(--bg);font-weight:600}
+.tcode{fill:var(--ink);font-weight:600}
+.edge{fill:none;stroke:var(--ink);stroke-width:1.5}
+.lp{fill:none;stroke:var(--red);stroke-width:1.5;stroke-dasharray:5 4}
+.lbl{fill:var(--mute);font-size:13px;paint-order:stroke;stroke:var(--bg);stroke-width:4px}
+.lblr{fill:var(--red);font-size:13px;font-weight:600;paint-order:stroke;stroke:var(--bg);stroke-width:4px}
+.tok{fill:var(--red)}
+g[data-go]{cursor:pointer}
+g[data-go]:hover rect{stroke-width:3}
+/* flow */
+.fhead{display:grid;grid-template-columns:minmax(0,1fr) 40px minmax(0,1.7fr) 40px minmax(0,1fr);font-size:13px;color:var(--mute);border-bottom:1.5px solid var(--ink);padding-bottom:6px;margin-top:28px;position:sticky;top:0;background:var(--bg);z-index:5}
+.fhead span:nth-child(2){grid-column:3}
+.fhead span:nth-child(3){grid-column:5}
+.row{display:grid;grid-template-columns:minmax(0,1fr) 40px minmax(0,1.7fr) 40px minmax(0,1fr);align-items:center;padding-top:6px}
+.ins,.outs{display:flex;flex-direction:column;gap:6px}
+.ar{height:0;border-top:1.5px solid var(--ink);position:relative;margin:0 4px}
+.ar::after{content:"";position:absolute;right:-2px;top:-6px;border:5px solid transparent;border-left:8px solid var(--ink)}
+.ar.none{border:0}.ar.none::after{display:none}
+.c{font:13px/1.35 var(--mono);border:1.5px solid var(--ink);padding:5px 9px;border-radius:2px;background:var(--bg);overflow-wrap:anywhere}
+.c small{display:block;font:12.5px/1.3 Archivo,Arial,sans-serif;color:var(--mute);margin-top:2px}
+.c.f{background:linear-gradient(225deg,var(--ink) 0 6px,var(--bg) 6px)}
+.c.env{border-style:dashed}
+.c.llm{background:var(--ink);color:var(--bg)}
+.c.llm small{color:#cfcfcf}
+.c.st{border-radius:16px;border-color:var(--mute)}
+.c.con{border-color:var(--mute);color:var(--mute)}
+.node{border:1.5px solid var(--ink);padding:14px 16px 12px;background:var(--bg)}
+.node.ai{border-width:3px}
+.nh{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;margin-bottom:6px}
+.num{flex:none;display:inline-grid;place-items:center;width:28px;height:28px;border:1.5px solid var(--ink);border-radius:50%;font:700 13px Archivo,Arial,sans-serif;align-self:center}
+.node.ai .num{background:var(--ink);color:var(--bg)}
+.nh b{font-size:17px}
+.nh code{font-size:13px;color:var(--mute)}
+.node p{font-size:15px;margin:0 0 6px}
+.calls{margin:6px 0 0;padding-left:20px;font:13px/1.5 var(--mono)}
+.calls li{margin:2px 0}
+.calls li span{font-family:Archivo,Arial,sans-serif;color:var(--mute)}
+.tagr{display:inline-block;font:600 12.5px Archivo,Arial,sans-serif;color:var(--red);border:1.5px solid var(--red);border-radius:2px;padding:0 6px}
+.down{display:grid;grid-template-columns:minmax(0,1fr) 40px minmax(0,1.7fr) 40px minmax(0,1fr)}
+.v{grid-column:3;position:relative;min-height:46px;padding:8px 0 8px calc(50% + 14px);font:13px/1.35 var(--mono);color:var(--mute)}
+.v::before{content:"";position:absolute;left:50%;top:0;bottom:8px;border-left:1.5px solid var(--ink)}
+.v::after{content:"";position:absolute;left:calc(50% - 5px);bottom:0;border:5px solid transparent;border-top:8px solid var(--ink);border-bottom:0}
+.v.loop{color:var(--red)}
+.v.loop::before{border-left:1.5px dashed var(--red)}
+.v.loop::after{border-top-color:var(--red)}
+.grouphead{margin:18px 0 0;font-size:14px;font-weight:600;border-top:1px solid var(--hair);padding-top:10px}
+.dec{grid-column:3;border:1.5px solid var(--red);padding:12px 16px}
+.dec b{color:var(--red)}
+/* recipes */
+.files{display:flex;flex-wrap:wrap;gap:8px;margin:8px 0 18px}
+.files .c.new{border-color:var(--red)}
+.road{list-style:none;margin:10px 0 0;padding:0;counter-reset:s}
+.road>li{position:relative;padding:0 0 22px 52px;counter-increment:s}
+.road>li::before{content:counter(s);position:absolute;left:0;top:-2px;width:34px;height:34px;border:1.5px solid var(--ink);border-radius:50%;display:grid;place-items:center;font-weight:800;font-size:14px;background:var(--bg)}
+.road>li::after{content:"";position:absolute;left:17px;top:32px;bottom:0;border-left:1.5px solid var(--ink)}
+.road>li:last-child::after{display:none}
+.road>li>b{display:block;font-size:16px;margin-bottom:4px}
+.recipe{border-top:1.5px solid var(--ink);margin-top:56px;padding-top:4px}
+.recipe h2{margin-top:18px}
+.when{font-size:15px;color:var(--mute);margin-bottom:6px}
+.layers{display:grid;gap:0}
+.ly{display:grid;grid-template-columns:200px minmax(0,1fr);gap:16px;align-items:center;padding:10px 0;border-bottom:1px solid var(--hair)}
+.ly>b{font-size:15px}
+.ly div{display:flex;flex-wrap:wrap;gap:6px}
+.ul{margin:0 0 12px;padding-left:20px}
+.ul li{margin:4px 0}
+@media(max-width:860px){
+ body{display:block}
+ aside{position:sticky;top:0;z-index:10;height:auto;background:var(--bg);border-right:0;border-bottom:1px solid var(--hair);padding:8px 12px}
+ aside .brand,aside .sub,aside .meta,nav .subnav{display:none}
+ nav{display:flex;gap:6px;overflow-x:auto}
+ nav a{flex:none;white-space:nowrap}
+ html{scroll-padding-top:72px}
+ .fhead{display:none}
+ .row,.down{grid-template-columns:minmax(0,1fr)}
+ .ins::before{content:"czyta";font-size:13px;color:var(--mute)}
+ .outs::before{content:"zapisuje / zwraca";font-size:13px;color:var(--mute)}
+ .ar{width:0;height:18px;border-top:0;border-left:1.5px solid var(--ink);margin:4px auto}
+ .ar::after{right:auto;left:-6px;top:auto;bottom:-2px;border:5px solid transparent;border-top:8px solid var(--ink);border-bottom:0}
+ .ar.none{display:none}
+ .v,.dec{grid-column:1}
+ .ins:empty,.outs:empty{display:none}
+ .io{grid-template-columns:minmax(0,1fr)}
+ .io .ar{width:0;height:24px;border-top:0;border-left:1.5px solid var(--ink);justify-self:center}
+ .io .ar::after{right:auto;left:-6px;top:auto;bottom:-1px;border:5px solid transparent;border-top:8px solid var(--ink)}
+ .ly{grid-template-columns:minmax(0,1fr);gap:6px}
+}
+@media(max-width:600px){
+ table{font-size:13px}
+ th,td{padding:6px 4px}
+ .stack thead{display:none}
+ .stack tr{display:grid;padding:10px 0;border-bottom:1px solid var(--hair)}
+ .stack td{border:0;padding:2px 0}
+ .stack td::before{content:attr(data-l);display:block;font-size:12.5px;color:var(--mute)}
+ .gl{grid-template-columns:minmax(0,1fr)}
+ .gl dt{border:0;padding-bottom:0}
+}
+</style>
+</head>
+<body>
+<aside>
+ <div class="brand">Doc-Agents</div>
+ <div class="sub">Dokumentacja dla dewelopera</div>
+ <nav id="nav">
+  <a href="#przeglad"><i></i>Przegląd</a>
+  <a href="#struktura"><i></i>Struktura projektu</a>
+  <a href="#przeplyw"><i></i>Przepływ działania</a>
+  <a href="#rozszerzenia"><i></i>Rozszerzenia</a>
+  <div class="subnav">
+   <a href="#ext-uipath">Obsługa UiPath</a>
+   <a href="#ext-framework">Nowy framework w bazie wiedzy</a>
+   <a href="#ext-robot">Robot Framework</a>
+   <a href="#ext-nice">NICE RPA</a>
+   <a href="#ext-szablony">Pola i rozdziały dokumentu</a>
+   <a href="#ext-model">Model i dostawca</a>
+   <a href="#ext-agent">Nowy agent w grafie</a>
+  </div>
+  <a href="#przewodnik"><i></i>Przewodnik dewelopera</a>
+ </nav>
+ <div class="meta">Stan kodu: 23.11.2026, fazy A–E zamknięte. Repozytorium: <code>development/doc-agents</code>.</div>
+</aside>
+
+<main>
+<div id="tip" hidden></div>
+
+<!-- ====================== PRZEGLĄD ====================== -->
+<section class="tab" id="przeglad">
+ <h1>Doc-Agents: zespół agentów, który pisze dokumentację robota RPA</h1>
+ <p class="lead">Narzędzie dostaje folder istniejącego projektu (głównie robota RPA w Pythonie), analizuje kod i oddaje jeden plik Markdown dla dewelopera, który przejmuje robota.</p>
+
+ <div class="io">
+  <div class="box"><h3>Wejście</h3><p class="note">folder projektu robota<br><code>--project &lt;ścieżka&gt;</code></p></div>
+  <div class="ar"></div>
+  <div class="core"><b>Graf LangGraph</b><span>skan bez AI, planista, analitycy równolegle, redaktor, recenzent z pętlą poprawek</span></div>
+  <div class="ar"></div>
+  <div class="box"><h3>Wyjście</h3><p class="note"><code>output/final.md</code><br>plus wyniki pośrednie każdego etapu</p></div>
+ </div>
+
+ <h2>Uruchomienie w 4 krokach</h2>
+ <ol class="road">
+  <li><b>Środowisko Python 3.14</b>Z katalogu repo, w PowerShell:
+   <div class="cb"><pre>py -V:3.14 -m venv venv
+.\venv\Scripts\Activate.ps1
+pip install -r requirements.txt</pre></div></li>
+  <li><b>Zmienne środowiskowe użytkownika</b>Klucz i adres endpointu modelu nie są w repo. <code>config.yaml</code> zna tylko ich nazwy. Po ustawieniu otwórz nowe okno terminala.
+   <div class="cb"><pre>[Environment]::SetEnvironmentVariable("LLM_API_KEY", "&lt;klucz&gt;", "User")
+[Environment]::SetEnvironmentVariable("LLM_BASE_URL", "&lt;adres endpointu zgodnego z OpenAI&gt;", "User")</pre></div></li>
+  <li><b>Sprawdzenie modelu</b>Diagnostyka profilu: połączenie, metody structured output, zalecana wartość <code>structured_output_method</code>.
+   <div class="cb"><pre>python -m scripts.probe_llm --profile small
+python -m scripts.probe_llm --profile medium</pre></div></li>
+  <li><b>Przebieg</b>Kilka minut. Na ekranie pojawia się linia postępu dla każdego etapu.
+   <div class="cb"><pre>python main.py --project ..\..\tests\01_rpa_challange_roboforge</pre></div>
+   <p class="note">Wynik: <code>output/final.md</code>. Katalog <code>output/</code> jest czyszczony przy każdym starcie, więc wynik do zachowania skopiuj w inne miejsce.</p></li>
+ </ol>
+
+ <h2>Pojęcia, które warto znać przed lekturą kodu</h2>
+ <dl class="gl">
+  <dt>Węzeł</dt><dd>Zwykła funkcja <code>(state, runtime) -&gt; dict</code> zarejestrowana w grafie. Zwraca tylko te pola stanu, które zmienia.</dd>
+  <dt>Stan (<code>DocState</code>)</dt><dd>Dane przebiegu przekazywane między węzłami: mapa projektu, plan, notatki, dokument, recenzja. Słownik typowany (<code>TypedDict</code>), chudy: bez treści plików.</dd>
+  <dt>Kontekst (<code>RunContext</code>)</dt><dd>Narzędzia wspólne dla wszystkich węzłów, tworzone raz: config, modele agentów, zapis wyników, spis bazy wiedzy. Węzeł dostaje go przez <code>runtime.context</code>.</dd>
+  <dt><code>Send</code></dt><dd>Mechanizm LangGraph do równoległego uruchomienia jednego węzła wiele razy. Tu: jeden analityk na każdą jednostkę kodu.</dd>
+  <dt>Reducer</dt><dd>Reguła łączenia wyników równoległych węzłów. Pole <code>notes</code> ma <code>operator.add</code>, więc notatki analityków są doklejane, a nie nadpisywane.</dd>
+  <dt>Structured output</dt><dd>Model odpowiada obiektem zgodnym ze schematem Pydantic (np. <code>Plan</code>), a nie wolnym tekstem. Wywołanie zawsze przez <code>llm.invoke_structured()</code>.</dd>
+  <dt>Jednostka kodu</dt><dd>Zadanie dla jednego analityka. W Pythonie jeden niepusty plik źródłowy spoza frameworku.</dd>
+  <dt>Szkielet (outline)</dt><dd>Struktura pliku bez pełnej treści: klasy, funkcje, sygnatury, pierwsze akapity docstringów. Buduje go technologia.</dd>
+  <dt>Technologia</dt><dd>Wtyczka obsługi języka lub platformy (Python, UiPath). Rdzeń nie zna żadnego języka, pyta tylko technologię.</dd>
+  <dt>Baza wiedzy</dt><dd>Pliki Markdown z wiedzą zespołu (frameworki, konwencje, zasady pisania). Planista wybiera z nich te, które przydadzą się dla danego projektu.</dd>
+  <dt>Szablony</dt><dd>Pola części formalnej i stałe rozdziały części opisowej w YAML oraz układ dokumentu w Jinja2. Zmiana dokumentu bez zmiany kodu.</dd>
+ </dl>
+
+ <h2>Jak czytać tę dokumentację</h2>
+ <div class="cards">
+  <a href="#struktura"><b>Struktura projektu</b><span>Mapa katalogów i plików. Najedź na element, aby zobaczyć, czym jest i po co istnieje.</span></a>
+  <a href="#przeplyw"><b>Przepływ działania</b><span>Od <code>python main.py</code> do <code>final.md</code>: każdy węzeł, każda funkcja, każdy czytany i zapisywany plik.</span></a>
+  <a href="#rozszerzenia"><b>Rozszerzenia</b><span>Przepisy: UiPath, Robot Framework, NICE RPA, nowy framework, pola dokumentu, nowy agent.</span></a>
+  <a href="#przewodnik"><b>Przewodnik dewelopera</b><span>Zasady architektury, kolejność lektury, testy ręczne, diagnoza błędów.</span></a>
+ </div>
+</section>
+
+<!-- ====================== STRUKTURA ====================== -->
+<section class="tab" id="struktura" hidden>
+ <h1>Struktura projektu</h1>
+ <p class="lead">Najedź myszką na element (albo dotknij go na telefonie), aby zobaczyć, czym jest i jaką ma rolę. Kliknięcie przypina opis.</p>
+ <div class="legend">
+  <span><i class="mk ai"></i>woła model AI</span>
+  <span><i class="mk"></i>kod deterministyczny</span>
+  <span><i class="mk cfg"></i>treść i konfiguracja: zmiana bez programowania</span>
+  <span><i class="mk gen"></i>generowane, poza gitem</span>
+ </div>
+
+ <div class="map">
+  <div class="grp">
+   <button class="it dir" data-w="Katalog główny repozytorium narzędzia. Wszystkie polecenia uruchamiamy stąd." data-r="Moduły uruchamia się przez python -m z tego katalogu, dzięki czemu importy doc_agents.* działają bez instalowania pakietu.">doc-agents/</button>
+   <ul class="tr">
+    <li><button class="it" data-w="Punkt wejścia programu: parse_args(), main(), print_summary()." data-r="Czyta --project i --config, wczytuje config, tworzy RunContext, uruchamia graf (run_graph) i wypisuje podsumowanie ze stanu końcowego. Nie ma logiki etapów: to spis treści przebiegu."><i class="mk"></i>main.py</button></li>
+    <li><button class="it" data-w="Jedyny plik konfiguracji, podzielony na sekcje: llm, paths, scan, analysis, limits." data-r="Profile modeli (small, medium) i przypisanie agentów do profili, ścieżki promptów i bazy wiedzy, reguły skanu (ignore, secret_patterns, role_patterns, frameworks), limit rozmiaru pliku i równoległości analityków, limit rund recenzji. Trzyma tylko NAZWY zmiennych z kluczem i adresem, nigdy wartości."><i class="mk cfg"></i>config.yaml</button></li>
+    <li><button class="it" data-w="Lista bezpośrednich zależności: pyyaml, pydantic, langchain-core, langchain-openai, jinja2, langgraph." data-r="Dopisywana ręcznie, bez pip freeze. Nowa biblioteka trafia tu w kroku, który jej potrzebuje."><i class="mk cfg"></i>requirements.txt</button></li>
+    <li><button class="it" data-w="Zasady pracy dla modeli AI i ludzi piszących kod w tym repo." data-r="Sposób pracy (krok = test = commit), reguły kodu (os.path zamiast pathlib, tylko llm.py importuje langchain_openai, tylko python.py importuje ast), styl (docstring CO / Po co, manual_test), lista rzeczy, których nie proponować. Przeczytaj przed pierwszą zmianą."><i class="mk cfg"></i>AGENTS.md</button></li>
+    <li><button class="it" data-w="Krótki opis repozytorium (obecnie dwie linie)." data-r="Miejsce na link do tej dokumentacji i instrukcję uruchomienia."><i class="mk cfg"></i>README.md</button></li>
+    <li><button class="it" data-w="Lista plików pomijanych przez git." data-r="Wyklucza m.in. venv/, output/ i __pycache__/, więc wyniki przebiegów i środowisko nie trafiają do repo."><i class="mk cfg"></i>.gitignore</button></li>
+    <li><button class="it dir" data-w="Narzędzia diagnostyczne uruchamiane ręcznie." data-r="Nie są częścią przebiegu grafu.">scripts/</button>
+     <ul class="tr"><li><button class="it" data-w="Diagnostyka profilu modelu: proste wywołanie, system + user, trzy metody structured output (function_calling, json_schema, json_mode), tool calling, zużycie tokenów." data-r="Uruchamiana po każdej zmianie modelu, endpointu albo parametrów profilu. Rekomenduje wartość structured_output_method do wpisania w config.yaml (uwaga: poleca pierwszą działającą, a dla długich odpowiedzi pewniejsza jest json_schema)."><i class="mk ai"></i>probe_llm.py</button></li></ul></li>
+    <li><button class="it dir" data-w="Środowisko wirtualne Python 3.14 (nazwa bez kropki)." data-r="Poza gitem. Skaner pomija każde venv w dokumentowanych projektach, rozpoznając je po pliku pyvenv.cfg, a nie po nazwie."><i class="mk gen"></i>venv/</button></li>
+    <li><button class="it dir" data-w="Ta dokumentacja dla dewelopera." data-r="Strona HTML otwierana w przeglądarce, utrzymywana razem z kodem.">docs/</button></li>
+   </ul>
+  </div>
+
+  <div class="grp">
+   <button class="it dir" data-w="Rdzeń narzędzia: konfiguracja, stan, kontekst, graf, skaner, dostęp do modeli, prompty, baza wiedzy, zapis wyników." data-r="Nie zna żadnego konkretnego języka ani frameworku: wiedza o technologii jest w technologies/, a o dokumencie w knowledge_base/templates/.">doc_agents/</button>
+   <ul class="tr">
+    <li><button class="it" data-w="Modele Pydantic configu (LLMProfile, LLMConfig, PathsConfig, ScanConfig, AnalysisConfig, LimitsConfig, AppConfig) i load_config()." data-r="Jedyne wejście do konfiguracji: wczytuje YAML, sprawdza, czy każdy agent wskazuje istniejący profil (check_agent_profiles), zamienia ścieżki na bezwzględne względem położenia configu (resolve_paths)."><i class="mk"></i>config.py</button></li>
+    <li><button class="it" data-w="RunContext (dataclass): config, run_store, models (agent → model), kb_index. Funkcja create_run_context()." data-r="Narzędzia przebiegu tworzone raz i wstrzykiwane do każdego węzła przez runtime.context. create_run_context() domyślnie czyści output/ i tworzy modele (wymaga zmiennych LLM_API_KEY i LLM_BASE_URL, ale nie wysyła zapytań)."><i class="mk"></i>context.py</button></li>
+    <li><button class="it" data-w="DocState (TypedDict) i AnalystInput." data-r="Opis danych przebiegu: project_path, project_map, plan, notes (reducer operator.add), document, missing, review, review_round, review_done. AnalystInput to paczka danych jednego analityka przekazywana przez Send."><i class="mk"></i>state.py</button></li>
+    <li><button class="it" data-w="Klasy Pydantic danych między etapami: FileEntry, CodeUnit, ProjectMap, AnalysisTask, DescriptiveSection, Plan, ModuleNote, FormalField, FormalSection, DescriptiveChapter, DescriptivePart, ReviewResult." data-r="Umowa między etapami i format plików JSON w output/. Schematy odpowiedzi modelu mają Field(description=...): model widzi opis każdego pola, więc to część „promptu”."><i class="mk"></i>schemas.py</button></li>
+    <li><button class="it" data-w="Graf LangGraph: węzły scan, plan, analyze, edit, review, finalize; build_graph(), run_graph(), podgląd postępu." data-r="Jedyne miejsce, gdzie widać kolejność etapów. dispatch_analysts() rozsyła Send na analityków, route_after_review() decyduje: poprawki albo finalize. run_graph() używa stream() i wypisuje linię postępu dla startu i końca każdego węzła."><i class="mk"></i>graph.py</button></li>
+    <li><button class="it" data-w="Skaner: list_files(), classify_file(), framework_for_path(), build_code_units(), build_project_map()." data-r="Pierwszy etap, bez AI: buduje mapę projektu (pliki z rolami, framework, technologia, punkty wejścia, jednostki kodu). Nie czyta treści plików poza 8 KB pliku o nieznanym typie (test binarności)."><i class="mk"></i>scanner.py</button></li>
+    <li><button class="it" data-w="Fabryka modeli i wspólne wywołanie: read_env(), create_chat_model() z rejestrem providers, get_model_for_agent(), get_structured_output_method(), invoke_structured()." data-r="Jedyny moduł importujący langchain_openai. invoke_structured() ponawia odpowiedź niezgodną ze schematem (2 próby) i zamienia ciche None na czytelny błąd z finish_reason i zużyciem tokenów."><i class="mk ai"></i>llm.py</button></li>
+    <li><button class="it" data-w="render_prompt(prompts_dir, agent, variables) zwracające parę (system, user)." data-r="system.md idzie bez zmian, user.md jest szablonem Jinja2 ze StrictUndefined: brak zmiennej kończy się błędem z nazwą agenta i zmiennej, zamiast pustego miejsca w poleceniu."><i class="mk"></i>prompts.py</button></li>
+    <li><button class="it" data-w="Baza wiedzy i szablony: load_index(), read_kb_file(), load_fixed_sections(), load_required_section_titles(), load_formal_fields(), load_formal_field_titles()." data-r="Czyta spis index.md dla planisty, treść plików wiedzy (z blokadą ścieżek spoza knowledge_base/knowledge/, bo nazwy podaje model) i szablony dokumentu dla planisty i redaktora."><i class="mk"></i>knowledge.py</button></li>
+    <li><button class="it" data-w="RunStore (path, save_text, save_json, load_json) i create_run_store()." data-r="Zapis i odczyt wyników w stałym katalogu output/ obok repo. Czyszczenie przy starcie gwarantuje, że w output/ są tylko pliki z ostatniego przebiegu."><i class="mk"></i>output.py</button></li>
+    <li><button class="it dir" data-w="Agenci: każdy w osobnym pliku, zawsze para czysta funkcja + cienki węzeł grafu." data-r="Logikę (create_plan, create_note, create_document, review_document) da się wywołać bez grafu, co ułatwia testy ręczne.">agents/</button>
+     <ul class="tr">
+      <li><button class="it" data-w="create_plan(), build_planner_variables(), planner_node()." data-r="Na podstawie mapy projektu, spisu bazy wiedzy, stałych rozdziałów i tytułów pól formalnych prosi model o Plan: zadania analityków ze wskazówkami, pliki wiedzy dla analityków i redaktora, rozdziały części opisowej. Zapisuje plan.json."><i class="mk ai"></i>planner.py</button></li>
+      <li><button class="it" data-w="create_note(), build_unit_code(), build_project_outlines(), build_kb_text(), analyst_node()." data-r="Analizuje jedną jednostkę kodu: pełny kod (albo szkielet, gdy plik przekracza max_file_size_kb), szkielety reszty projektu, wskazówka planisty, wiedza. Zwraca ModuleNote, zapisuje notes/&lt;jednostka&gt;.json. Uruchamiany równolegle."><i class="mk ai"></i>analyst.py</button></li>
+      <li><button class="it" data-w="create_document(), create_formal_part(), create_descriptive_part(), render_document(), editor_node()." data-r="Dwa wywołania modelu: pola części formalnej (FormalSection) i rozdziały części opisowej (DescriptivePart). Składa Markdown z szablonów, liczy braki wymaganych pól i rozdziałów, w kolejnych rundach poprawia dokument według uwag recenzenta. Zapisuje document_NN.md."><i class="mk ai"></i>editor.py</button></li>
+      <li><button class="it" data-w="review_document(), ask_review(), reviewer_node()." data-r="Łączy braki policzone kodem z oceną modelu (ReviewResult). Akceptacja tylko wtedy, gdy model zaakceptował i nie ma braków. Węzeł ustala review_done (akceptacja albo limit rund) i zapisuje review_NN.json. Korzysta z funkcji pomocniczych editor.py."><i class="mk ai"></i>reviewer.py</button></li>
+     </ul></li>
+    <li><button class="it dir" data-w="Wtyczki technologii: kontrakt, rejestr i implementacje." data-r="Cała wiedza o języku lub platformie siedzi tutaj. Nowa technologia = nowy plik + wpis w rejestrze, bez zmian w rdzeniu.">technologies/</button>
+     <ul class="tr">
+      <li><button class="it" data-w="Rejestr: available_technologies(), detect_technology(), get_technology()." data-r="Kolejność sprawdzania ma znaczenie: bardziej specyficzne technologie przed Pythonem (dziś UiPath, potem Python), bo projekt UiPath może zawierać pomocnicze skrypty .py."><i class="mk"></i>__init__.py</button></li>
+      <li><button class="it" data-w="Klasa bazowa Technology: name, detect(), is_source(), find_entrypoints(), outline(), imports(). Plus DemoTechnology w teście." data-r="Kontrakt, z którego korzysta skaner i analityk. Docstringi opisują dokładnie, co każda metoda przyjmuje i zwraca: to specyfikacja dla autora nowej technologii."><i class="mk"></i>base.py</button></li>
+      <li><button class="it" data-w="PythonTechnology: parsowanie kodu modułem ast (jedyny import ast w projekcie)." data-r="Szkielety plików (klasy, funkcje, zakresy linii, stałe, kod poza funkcjami), importy w trzech grupach (internal, external, stdlib), punkty wejścia (main.py, __main__.py, blok if __name__). Kod jest tylko czytany, nigdy uruchamiany."><i class="mk"></i>python.py</button></li>
+      <li><button class="it" data-w="UiPathTechnology: pusta klasa, detect() zawsze zwraca False." data-r="Przygotowane miejsce pod implementację. Każda metoda ma w docstringu listę tego, co z projektu UiPath trzeba uchwycić. Przepis w zakładce Rozszerzenia."><i class="mk"></i>uipath.py</button></li>
+     </ul></li>
+   </ul>
+  </div>
+
+  <div class="grp">
+   <button class="it dir" data-w="Prompty agentów: osobny katalog na każde wywołanie modelu." data-r="Tym stroi się jakość dokumentacji, bez zmian w kodzie. system.md to stałe instrukcje, user.md to szablon Jinja2 z danymi opakowanymi w tagi (ochrona przed prompt injection z analizowanego kodu).">prompts/</button>
+   <ul class="tr">
+    <li><button class="it dir" data-w="Prompt planisty." data-r="user.md dostaje: project_name, project_map (JSON), kb_index (JSON), fixed_sections (JSON), formal_fields (lista)."><i class="mk cfg"></i>planner/ <small>system.md, user.md</small></button></li>
+    <li><button class="it dir" data-w="Prompt analityka." data-r="user.md dostaje: project_name, unit_name, hint, plan_summary, unit_code, project_outlines, kb_files. Najważniejsze pole odpowiedzi: process_steps."><i class="mk cfg"></i>analyst/ <small>system.md, user.md</small></button></li>
+    <li><button class="it dir" data-w="Prompt redaktora dla części formalnej." data-r="user.md dostaje: project_name, plan_summary, fields (pola source: llm z instrukcjami), notes, kb_files; w rundzie poprawek także previous_document i review_issues."><i class="mk cfg"></i>editor_formal/ <small>system.md, user.md</small></button></li>
+    <li><button class="it dir" data-w="Prompt redaktora dla części opisowej." data-r="user.md dostaje: project_name, plan_summary, sections, formal_part, notes, kb_files; w rundzie poprawek także previous_document i review_issues."><i class="mk cfg"></i>editor_descriptive/ <small>system.md, user.md</small></button></li>
+    <li><button class="it dir" data-w="Prompt recenzenta." data-r="user.md dostaje: project_name, document, notes, kb_files. system.md mówi, co jest problemem (issues), a co tylko sugestią (suggestions)."><i class="mk cfg"></i>reviewer/ <small>system.md, user.md</small></button></li>
+   </ul>
+  </div>
+
+  <div class="grp">
+   <button class="it dir" data-w="Wiedza zespołu i szablony dokumentu." data-r="Dwa podkatalogi o różnych rolach: knowledge/ wybiera planista, templates/ kod wczytuje zawsze.">knowledge_base/</button>
+   <ul class="tr">
+    <li><button class="it dir" data-w="Pliki wiedzy w Markdown i ich spis." data-r="Planista widzi tylko spis (index.md) i wybiera pliki osobno dla analityków i dla redaktora. Treść wybranych plików trafia w całości do promptów.">knowledge/</button>
+     <ul class="tr">
+      <li><button class="it" data-w="Spis bazy wiedzy, zwykły tekst: blok na plik (nazwa, „Kiedy użyć:”, „Tagi:”), bloki oddzielone pustą linią." data-r="Jedyne, co planista wie o bazie wiedzy. Plik bez wpisu tutaj nigdy nie zostanie wybrany. „Kiedy użyć” pisz tak, żeby model umiał zdecydować."><i class="mk cfg"></i>index.md</button></li>
+      <li><button class="it" data-w="Zasady pisania dokumentacji: dla kogo, ton, poziom szczegółów, ścieżki procesu, wskazówki utrzymaniowe." data-r="Miara jakości dla redaktora i recenzenta."><i class="mk cfg"></i>documentation_goals.md</button></li>
+      <li><button class="it" data-w="Konwencje projektów RPA w Pythonie (pierwsza wersja)." data-r="Analityk porównuje z nimi kod i opisuje odstępstwa jako wskazówki utrzymaniowe."><i class="mk cfg"></i>python_conventions.md</button></li>
+      <li><button class="it" data-w="Frameworki RPA: Roboforge i REFramework, ukryty przepływ sterowania." data-r="Mówi analitykowi, które metody wywołuje framework, a nie kod robota, i jak odróżnić błąd biznesowy od technicznego."><i class="mk cfg"></i>rpa_framework.md</button></li>
+     </ul></li>
+    <li><button class="it dir" data-w="Szablony dokumentu, wczytywane przez kod przy każdym przebiegu." data-r="Kod nie zna konkretnych pól ani rozdziałów: wszystko wynika z tych plików.">templates/</button>
+     <ul class="tr">
+      <li><button class="it" data-w="Pola części formalnej: name, title, type (text/list), required, source (llm/scanner), instruction albo scanner (entrypoints, role:&lt;rola&gt;)." data-r="Nowe pole = nowy wpis. Pola source: scanner kod wypełnia z mapy projektu bez modelu; pola source: llm wypełnia redaktor."><i class="mk cfg"></i>formal_template.yaml</button></li>
+      <li><button class="it" data-w="Układ części formalnej, szablon Jinja2 z pętlą po polach." data-r="Zmienia wygląd części formalnej. Pętla obsługuje każde pole z YAML, więc nowe pole nie wymaga zmiany tego pliku."><i class="mk cfg"></i>formal_template.md</button></li>
+      <li><button class="it" data-w="Stałe rozdziały części opisowej: title, required, instruction." data-r="Planista przepisuje je do planu, redaktor je pisze, kod sprawdza obecność wymaganych (required: true)."><i class="mk cfg"></i>descriptive_template.yaml</button></li>
+      <li><button class="it" data-w="Układ całego dokumentu: tytuł, część formalna, część opisowa." data-r="Zmiana kolejności lub nagłówków dokumentu bez zmiany kodu."><i class="mk cfg"></i>document_template.md</button></li>
+     </ul></li>
+   </ul>
+  </div>
+
+  <div class="grp gen">
+   <button class="it dir" data-w="Wyniki ostatniego przebiegu. Stała lokalizacja obok repo, czyszczona przy każdym starcie, poza gitem." data-r="Pozwala obejrzeć wynik każdego etapu i powtórzyć pojedynczy etap na zapisanych danych (testy ręczne redaktora i recenzenta)."><i class="mk gen"></i>output/</button>
+   <ul class="tr">
+    <li><button class="it" data-w="Mapa projektu (ProjectMap) jako JSON." data-r="Zapisuje węzeł scan. Sprawdź tu, czy pliki mają dobre role i czy jednostki kodu są kompletne."><i class="mk gen"></i>project_map.json</button></li>
+    <li><button class="it" data-w="Plan (Plan) jako JSON." data-r="Zapisuje węzeł plan. Sprawdź zadania analityków, wybrane pliki wiedzy i rozdziały."><i class="mk gen"></i>plan.json</button></li>
+    <li><button class="it" data-w="Notatki analityków (ModuleNote), jeden plik na jednostkę; ukośniki w nazwie zamienione na __." data-r="Jedyne źródło wiedzy o kodzie dla redaktora. Błąd w dokumencie zacznij szukać tutaj."><i class="mk gen"></i>notes/*.json</button></li>
+    <li><button class="it" data-w="Część formalna: formal.md, formal_section.json, formal_missing.txt." data-r="Wynik pierwszego wywołania redaktora z ostatniej rundy i lista brakujących pól wymaganych."><i class="mk gen"></i>formal*.{md,json,txt}</button></li>
+    <li><button class="it" data-w="Część opisowa: descriptive_part.json, descriptive_missing.txt." data-r="Wynik drugiego wywołania redaktora z ostatniej rundy i lista brakujących rozdziałów wymaganych."><i class="mk gen"></i>descriptive*.{json,txt}</button></li>
+    <li><button class="it" data-w="Dokument z każdej rundy (01, 02, ...) i recenzja każdej rundy." data-r="Historia pętli recenzji: widać, co recenzent zgłosił i co redaktor poprawił."><i class="mk gen"></i>document_NN.md, review_NN.json</button></li>
+    <li><button class="it" data-w="Dokument końcowy." data-r="Zapisuje węzeł finalize: ostatnia wersja po pętli recenzji, zaakceptowana albo ostatnia przed limitem."><i class="mk gen"></i>final.md</button></li>
+   </ul>
+  </div>
+ </div>
+</section>
+
+<!-- ====================== PRZEPŁYW ====================== -->
+<section class="tab" id="przeplyw" hidden>
+ <h1>Przepływ działania: od <code>python main.py</code> do <code>final.md</code></h1>
+ <p class="lead">Na górze mapa grafu (kliknij węzeł, aby przejść do szczegółów). Pod nią każdy krok osobno: co czyta, co się w nim wykonuje (funkcje w kolejności wywołań) i co zapisuje lub zwraca.</p>
+ <div class="fig" id="gfig"><svg id="graph" role="img" aria-label="Graf: scan, plan, analyze równolegle, edit, review z pętlą poprawek do edit, finalize"></svg></div>
+ <div class="legend">
+  <span><i class="mk ai"></i>węzeł z wywołaniem modelu</span><span><i class="mk"></i>węzeł bez AI</span>
+  <span><span class="c f" style="padding:1px 8px">plik</span></span>
+  <span><span class="c env" style="padding:1px 8px">zmienna środ.</span></span>
+  <span><span class="c llm" style="padding:1px 8px">model</span></span>
+  <span><span class="c st" style="padding:1px 8px">pole stanu</span></span>
+ </div>
+
+ <div class="fhead"><span>czyta</span><span>co się dzieje</span><span>zapisuje / zwraca</span></div>
+
+ <div class="row" id="step-start">
+  <div class="ins"><div class="c">argumenty wiersza poleceń<small>--project, --config</small></div><div class="c f">config.yaml</div></div>
+  <div class="ar"></div>
+  <div class="node"><div class="nh"><span class="num">S</span><b>Start</b><code>main.py, config.py</code></div>
+   <p>Sprawdzenie argumentów i wczytanie konfiguracji. Literówka w profilu agenta zatrzymuje program tu, zanim zużyje tokeny.</p>
+   <ol class="calls"><li>main()</li><li>parse_args() <span>katalog projektu musi istnieć</span></li><li>load_config(path) <span>YAML na AppConfig</span></li><li>check_agent_profiles() <span>agent wskazuje istniejący profil</span></li><li>resolve_paths() <span>ścieżki względem configu</span></li></ol></div>
+  <div class="ar"></div>
+  <div class="outs"><div class="c">AppConfig<small>obiekt konfiguracji w pamięci</small></div></div>
+ </div>
+ <div class="down"><div class="v">config</div></div>
+
+ <div class="row" id="step-context">
+  <div class="ins"><div class="c env">LLM_API_KEY</div><div class="c env">LLM_BASE_URL</div><div class="c f">knowledge_base/knowledge/index.md</div></div>
+  <div class="ar"></div>
+  <div class="node"><div class="nh"><span class="num">K</span><b>Kontekst uruchomienia</b><code>context.py, output.py, llm.py, knowledge.py</code></div>
+   <p>Narzędzia wspólne dla wszystkich węzłów, tworzone raz. Samo utworzenie modeli nie wysyła zapytań.</p>
+   <ol class="calls"><li>create_run_context(config)</li><li>create_run_store() <span>usuwa i zakłada output/</span></li><li>create_models() <span>dla każdego agenta z llm.agents</span></li><li>get_model_for_agent() → create_chat_model() → create_openai_compatible() <span>ChatOpenAI</span></li><li>read_env() <span>brak zmiennej = błąd z jej nazwą</span></li><li>load_index() → parse_index() <span>spis bazy wiedzy</span></li></ol></div>
+  <div class="ar"></div>
+  <div class="outs"><div class="c">RunContext<small>config, run_store, models, kb_index</small></div><div class="c f">output/ (pusty)</div></div>
+ </div>
+ <div class="down"><div class="v">RunContext, project_path</div></div>
+
+ <div class="row" id="step-graph">
+  <div class="ins"><div class="c">RunContext</div><div class="c">analysis.max_concurrency</div></div>
+  <div class="ar"></div>
+  <div class="node"><div class="nh"><span class="num">G</span><b>Uruchomienie grafu</b><code>graph.py</code></div>
+   <p>Graf startuje ze stanem zawierającym tylko ścieżkę projektu. Każdy węzeł dopisuje swoje pola.</p>
+   <ol class="calls"><li>run_graph(project_path, context)</li><li>build_graph() <span>add_node, add_edge, add_conditional_edges, compile()</span></li><li>.stream(stream_mode=["tasks", "values"]) <span>zdarzenia startu i końca węzłów</span></li><li>build_progress_line() → print_progress() <span>linia postępu z godziną i czasem</span></li></ol></div>
+  <div class="ar"></div>
+  <div class="outs"><div class="c st">project_path</div><div class="c con">konsola: linie postępu</div></div>
+ </div>
+ <div class="down"><div class="v">START → scan</div></div>
+
+ <div class="row" id="step-scan">
+  <div class="ins"><div class="c f">folder projektu<small>tylko lista plików i rozmiary</small></div><div class="c">config.scan<small>ignore, secret_patterns, role_patterns, frameworks</small></div><div class="c f">technologies/python.py<small>is_source, find_entrypoints</small></div></div>
+  <div class="ar"></div>
+  <div class="node"><div class="nh"><span class="num">1</span><b>scan</b><code>graph.scan_node → scanner.py</code></div>
+   <p>Mapa projektu bez AI i bez czytania treści plików. Sekrety rozpoznawane jako pierwsze, ich treść nie jest nawet otwierana.</p>
+   <ol class="calls"><li>build_project_map(root, config.scan)</li><li>list_files() <span>pomija ignore i każde venv (pyvenv.cfg)</span></li><li>detect_technology() <span>rejestr: UiPath, potem Python</span></li><li>build_file_entries() → classify_file() <span>secret → source → role_patterns → binary/other</span></li><li>framework_for_path() <span>scan.frameworks</span></li><li>technology.find_entrypoints()</li><li>build_code_units() <span>source, spoza frameworku, niepuste</span></li></ol></div>
+  <div class="ar"></div>
+  <div class="outs"><div class="c f">output/project_map.json</div><div class="c st">project_map</div></div>
+ </div>
+ <div class="down"><div class="v">ProjectMap</div></div>
+
+ <div class="row" id="step-plan">
+  <div class="ins"><div class="c st">project_map</div><div class="c">kb_index<small>z RunContext</small></div><div class="c f">templates/descriptive_template.yaml</div><div class="c f">templates/formal_template.yaml<small>same tytuły pól</small></div><div class="c f">prompts/planner/system.md, user.md</div></div>
+  <div class="ar"></div>
+  <div class="node ai"><div class="nh"><span class="num">2</span><b>plan</b><code>agents/planner.py</code></div>
+   <p>Planista, zanim ktokolwiek przeczyta kod, decyduje: którzy analitycy, z jaką wiedzą, jakie rozdziały. Kod nie poprawia planu.</p>
+   <ol class="calls"><li>planner_node() → create_plan()</li><li>load_fixed_sections(), load_formal_field_titles()</li><li>build_planner_variables() <span>mapa i spis jako JSON</span></li><li>render_prompt(prompts, "planner", variables)</li><li>invoke_structured(models["planner"], Plan, metoda)</li></ol></div>
+  <div class="ar"></div>
+  <div class="outs"><div class="c llm">model planner<small>profil small, schemat Plan</small></div><div class="c f">output/plan.json</div><div class="c st">plan</div></div>
+ </div>
+ <div class="down"><div class="v">dispatch_analysts(): Send("analyze", …) × liczba zadań</div></div>
+
+ <div class="row" id="step-analyze">
+  <div class="ins"><div class="c">AnalystInput<small>task, project_map, plan (z Send)</small></div><div class="c f">pliki jednostki kodu<small>pełny kod albo szkielet ponad max_file_size_kb</small></div><div class="c f">pozostałe pliki źródłowe<small>tylko szkielety (outline)</small></div><div class="c f">knowledge/&lt;plan.analyst_kb_files&gt;</div><div class="c f">prompts/analyst/system.md, user.md</div></div>
+  <div class="ar"></div>
+  <div class="node ai"><div class="nh"><span class="num">3</span><b>analyze × N</b><code>agents/analyst.py</code><span class="tagr">równolegle</span></div>
+   <p>Jeden analityk na jednostkę kodu, najwyżej <code>max_concurrency</code> naraz. Redaktor nie widzi kodu, tylko te notatki.</p>
+   <ol class="calls"><li>analyst_node() → create_note()</li><li>find_code_unit() <span>nazwa z planu musi być w mapie</span></li><li>get_technology(project_map.technology)</li><li>build_unit_code() <span>&lt;plik sciezka="…"&gt;</span></li><li>build_project_outlines() → technology.outline()</li><li>build_kb_text() → read_kb_file() <span>blokada spoza bazy</span></li><li>render_prompt(prompts, "analyst", …)</li><li>invoke_structured(models["analyst"], ModuleNote, …)</li><li>note_filename() <span>src/a.py → notes/src__a.py.json</span></li></ol></div>
+  <div class="ar"></div>
+  <div class="outs"><div class="c llm">model analyst<small>profil small, schemat ModuleNote</small></div><div class="c f">output/notes/&lt;jednostka&gt;.json</div><div class="c st">notes += [notatka]<small>reducer operator.add</small></div></div>
+ </div>
+ <div class="down"><div class="v">wszystkie notatki (edit startuje raz, po ostatnim analityku)</div></div>
+
+ <p class="grouphead" id="step-edit">Węzeł edit (redaktor): trzy kroki w jednym węźle <span class="tagr">uruchamiany też po odrzuconej recenzji</span></p>
+ <div class="row">
+  <div class="ins"><div class="c st">project_map, plan, notes</div><div class="c f">templates/formal_template.yaml</div><div class="c f">knowledge/&lt;plan.editor_kb_files&gt;</div><div class="c f">prompts/editor_formal/system.md, user.md</div><div class="c st">document, review.issues<small>tylko w rundzie poprawek</small></div></div>
+  <div class="ar"></div>
+  <div class="node ai"><div class="nh"><span class="num">4a</span><b>Część formalna</b><code>editor.create_formal_part()</code></div>
+   <p>Pola source: scanner wypełnia kod z mapy projektu. Pola source: llm wypełnia model jednym wywołaniem. Pola spoza szablonu są odrzucane.</p>
+   <ol class="calls"><li>editor_node() <span>runda = review_round + 1</span></li><li>build_revision_variables() <span>poprzednia wersja i uwagi</span></li><li>load_formal_fields()</li><li>ask_formal_values() → render_prompt("editor_formal") → invoke_structured(FormalSection)</li><li>assemble_formal_section() → scanner_value() <span>entrypoints, role:&lt;rola&gt;</span></li><li>render_formal() <span>formal_template.md</span></li></ol></div>
+  <div class="ar"></div>
+  <div class="outs"><div class="c llm">model editor<small>profil medium, schemat FormalSection</small></div><div class="c f">output/formal.md, formal_section.json, formal_missing.txt</div></div>
+ </div>
+ <div class="down"><div class="v">formal_markdown, braki pól</div></div>
+ <div class="row">
+  <div class="ins"><div class="c st">plan.sections, notes</div><div class="c">część formalna<small>żeby jej nie powtarzać</small></div><div class="c f">templates/descriptive_template.yaml<small>tytuły wymaganych</small></div><div class="c f">prompts/editor_descriptive/system.md, user.md</div></div>
+  <div class="ar"></div>
+  <div class="node ai"><div class="nh"><span class="num">4b</span><b>Część opisowa</b><code>editor.create_descriptive_part()</code></div>
+   <p>Model pisze rozdziały, kod wstawia nagłówki w kolejności z planu i pilnuje rozdziałów wymaganych.</p>
+   <ol class="calls"><li>ask_descriptive_part() → render_prompt("editor_descriptive") → invoke_structured(DescriptivePart)</li><li>load_required_section_titles()</li><li>assemble_descriptive_part() <span>brak = „_Brak danych._” + wpis w brakach</span></li></ol></div>
+  <div class="ar"></div>
+  <div class="outs"><div class="c llm">model editor<small>profil medium, schemat DescriptivePart</small></div><div class="c f">output/descriptive_part.json, descriptive_missing.txt</div></div>
+ </div>
+ <div class="down"><div class="v">descriptive_markdown, braki rozdziałów</div></div>
+ <div class="row">
+  <div class="ins"><div class="c f">templates/document_template.md</div></div>
+  <div class="ar"></div>
+  <div class="node"><div class="nh"><span class="num">4c</span><b>Złożenie dokumentu</b><code>editor.render_document()</code></div>
+   <p>Cały dokument z szablonu Jinja2. Każda runda zapisuje osobną wersję.</p>
+   <ol class="calls"><li>render_document()</li><li>document_filename(runda) <span>document_01.md, 02, …</span></li></ol></div>
+  <div class="ar"></div>
+  <div class="outs"><div class="c f">output/document_NN.md</div><div class="c st">document, missing</div></div>
+ </div>
+ <div class="down"><div class="v">document, missing</div></div>
+
+ <div class="row" id="step-review">
+  <div class="ins"><div class="c st">document, missing, notes, plan</div><div class="c f">knowledge/&lt;plan.editor_kb_files&gt;</div><div class="c f">prompts/reviewer/system.md, user.md</div><div class="c">limits.max_review_rounds</div></div>
+  <div class="ar"></div>
+  <div class="node ai"><div class="nh"><span class="num">5</span><b>review</b><code>agents/reviewer.py</code></div>
+   <p>Braki policzone kodem zawsze blokują akceptację. O jakości treści decyduje model.</p>
+   <ol class="calls"><li>reviewer_node() → review_document()</li><li>ask_review() → render_prompt("reviewer") → invoke_structured(ReviewResult)</li><li>issues = braki z kodu + uwagi modelu</li><li>approved = model.approved and not missing</li><li>review_done = approved or runda ≥ max_review_rounds</li></ol></div>
+  <div class="ar"></div>
+  <div class="outs"><div class="c llm">model reviewer<small>profil medium, schemat ReviewResult</small></div><div class="c f">output/review_NN.json</div><div class="c st">review, review_round, review_done</div></div>
+ </div>
+ <div class="down"><div class="v">review_done</div></div>
+
+ <div class="row" id="step-route">
+  <div class="ins"></div><div class="ar none"></div>
+  <div class="dec"><b>route_after_review()</b> w <code>graph.py</code> tylko odczytuje <code>review_done</code>:
+   <ul class="ul" style="margin-top:6px"><li><b>False</b>: wraca do węzła <a href="#step-edit">edit</a> (krok 4a). Redaktor dostaje poprzednią wersję i <code>review.issues</code> i poprawia tylko wskazane miejsca.</li><li><b>True</b>: idzie do finalize.</li></ul></div>
+  <div class="ar none"></div><div class="outs"></div>
+ </div>
+ <div class="down"><div class="v">review_done = True</div></div>
+
+ <div class="row" id="step-finalize">
+  <div class="ins"><div class="c st">document</div></div>
+  <div class="ar"></div>
+  <div class="node"><div class="nh"><span class="num">6</span><b>finalize</b><code>graph.finalize_node</code></div>
+   <p>Zapis ostatniej wersji w stałym miejscu. Węzeł nie zmienia stanu. Potem END.</p>
+   <ol class="calls"><li>run_store.save_text("final.md", document)</li></ol></div>
+  <div class="ar"></div>
+  <div class="outs"><div class="c f">output/final.md</div></div>
+ </div>
+ <div class="down"><div class="v">stan końcowy (ostatnie zdarzenie "values")</div></div>
+
+ <div class="row" id="step-summary">
+  <div class="ins"><div class="c st">stan końcowy</div></div>
+  <div class="ar"></div>
+  <div class="node"><div class="nh"><span class="num">E</span><b>Podsumowanie</b><code>main.print_summary()</code></div>
+   <p>Technologia, pliki, punkty wejścia, jednostki, zadania i rozdziały planu, liczba notatek, braki, wynik recenzji i ścieżka dokumentu.</p></div>
+  <div class="ar"></div>
+  <div class="outs"><div class="c con">konsola</div></div>
+ </div>
+
+ <h2>Co z czym rozmawia: skrót</h2>
+ <div class="scroll">
+ <table class="stack">
+  <thead><tr><th>Agent</th><th>Prompt</th><th>Schemat odpowiedzi</th><th>Pliki wiedzy</th><th>Szablony</th><th>Profil</th></tr></thead>
+  <tbody>
+   <tr><td data-l="Agent">planner</td><td data-l="Prompt"><code>prompts/planner/</code></td><td data-l="Schemat"><code>Plan</code></td><td data-l="Wiedza">tylko spis <code>index.md</code></td><td data-l="Szablony"><code>descriptive_template.yaml</code>, tytuły z <code>formal_template.yaml</code></td><td data-l="Profil">small</td></tr>
+   <tr><td data-l="Agent">analyst</td><td data-l="Prompt"><code>prompts/analyst/</code></td><td data-l="Schemat"><code>ModuleNote</code></td><td data-l="Wiedza"><code>plan.analyst_kb_files</code></td><td data-l="Szablony">nie</td><td data-l="Profil">small</td></tr>
+   <tr><td data-l="Agent">editor (2 wywołania)</td><td data-l="Prompt"><code>prompts/editor_formal/</code>, <code>prompts/editor_descriptive/</code></td><td data-l="Schemat"><code>FormalSection</code>, <code>DescriptivePart</code></td><td data-l="Wiedza"><code>plan.editor_kb_files</code></td><td data-l="Szablony">wszystkie cztery</td><td data-l="Profil">medium</td></tr>
+   <tr><td data-l="Agent">reviewer</td><td data-l="Prompt"><code>prompts/reviewer/</code></td><td data-l="Schemat"><code>ReviewResult</code></td><td data-l="Wiedza"><code>plan.editor_kb_files</code></td><td data-l="Szablony">nie (braki przychodzą w stanie)</td><td data-l="Profil">medium</td></tr>
+  </tbody>
+ </table>
+ </div>
+ <p class="note">Przypisanie agent → profil jest w <code>config.yaml</code>, sekcja <code>llm.agents</code>. Nazwy modeli są w profilach.</p>
+</section>
+
+<!-- ====================== ROZSZERZENIA ====================== -->
+<section class="tab" id="rozszerzenia" hidden>
+ <h1>Rozszerzenia: co zmienić, w którym pliku i w jakiej strukturze</h1>
+ <p class="lead">Dwa poziomy rozszerzeń. Nowy format kodu (inne pliki niż .py) wymaga nowej <b>technologii</b> w <code>doc_agents/technologies/</code>. Nowa wiedza o frameworku działającym w już obsługiwanym formacie to tylko <b>plik w bazie wiedzy</b> i wpis w spisie.</p>
+ <div class="cards">
+  <a href="#ext-uipath"><b>Obsługa UiPath</b><span>Wypełnienie pustej klasy technologii</span></a>
+  <a href="#ext-framework"><b>Nowy framework w bazie wiedzy</b><span>Bez kodu: plik wiedzy, spis, config</span></a>
+  <a href="#ext-robot"><b>Robot Framework</b><span>Nowa technologia i plik wiedzy</span></a>
+  <a href="#ext-nice"><b>NICE RPA</b><span>Wzorzec do uzupełnienia po ustaleniu formatu</span></a>
+  <a href="#ext-szablony"><b>Pola i rozdziały dokumentu</b><span>Tylko YAML</span></a>
+  <a href="#ext-model"><b>Model i dostawca</b><span>Config, probe_llm, rejestr providers</span></a>
+  <a href="#ext-agent"><b>Nowy agent w grafie</b><span>Sześć miejsc do zmiany</span></a>
+ </div>
+
+ <h2>Kontrakt technologii w jednym miejscu</h2>
+ <p>Każda technologia to podklasa <code>Technology</code> z <code>technologies/base.py</code>. Ścieżki <code>files</code> i <code>path</code> są względne do <code>root</code>, metody niczego nie wypisują, pliki czytamy z <code>errors="replace"</code>.</p>
+ <div class="scroll">
+ <table class="stack">
+  <thead><tr><th>Metoda</th><th>Zwraca</th><th>Kto używa</th></tr></thead>
+  <tbody>
+   <tr><td data-l="Metoda"><code>name</code></td><td data-l="Zwraca">krótka nazwa, trafia do <code>ProjectMap.technology</code></td><td data-l="Kto">skaner, <code>get_technology()</code></td></tr>
+   <tr><td data-l="Metoda"><code>detect(root, files)</code></td><td data-l="Zwraca"><code>True</code>, gdy projekt jest w tej technologii</td><td data-l="Kto"><code>detect_technology()</code> w kolejności z rejestru</td></tr>
+   <tr><td data-l="Metoda"><code>is_source(path)</code></td><td data-l="Zwraca"><code>True</code> dla plików kodu (kandydatów do analizy)</td><td data-l="Kto"><code>scanner.classify_file()</code></td></tr>
+   <tr><td data-l="Metoda"><code>find_entrypoints(root, files)</code></td><td data-l="Zwraca">ścieżki punktów wejścia, najpewniejszy pierwszy</td><td data-l="Kto">skaner, pole formalne <code>scanner: entrypoints</code></td></tr>
+   <tr><td data-l="Metoda"><code>outline(root, path)</code></td><td data-l="Zwraca">szkielet pliku jako tekst; <code>""</code>, gdy się nie da</td><td data-l="Kto">analityk: szkielety projektu i duże pliki</td></tr>
+   <tr><td data-l="Metoda"><code>imports(root, path)</code></td><td data-l="Zwraca"><code>{"internal": [...], "external": [...], "stdlib": [...]}</code></td><td data-l="Kto">kontrakt i testy; dziś nie wołane przez agentów</td></tr>
+  </tbody>
+ </table>
+ </div>
+
+ <!-- UiPath -->
+ <div class="recipe" id="ext-uipath">
+  <h2>Obsługa UiPath</h2>
+  <p class="when">Kiedy: dokumentowanie projektów UiPath Studio (project.json, pliki .xaml, często REFramework).</p>
+  <div class="files"><span class="c f">technologies/uipath.py <small>wypełnić metody</small></span><span class="c f">config.yaml <small>scan.ignore, scan.frameworks</small></span><span class="c f">knowledge/index.md + plik wiedzy <small>opcjonalnie</small></span><span class="c f">AGENTS.md <small>usunąć zakaz implementacji UiPath</small></span></div>
+  <ol class="road">
+   <li><b>Przeczytaj kontrakt i wzór</b><code>technologies/base.py</code> (co metody przyjmują i zwracają), <code>technologies/python.py</code> (wzór implementacji), docstringi w <code>uipath.py</code> (lista, co uchwycić w każdej metodzie). Klasa jest już w rejestrze przed Pythonem, nie trzeba jej dopisywać.</li>
+   <li><b>Pomocnik do project.json i detect()</b>Rozpoznanie musi być pewne, bo rejestr sprawdza UiPath przed Pythonem. Usuń stałe <code>return False</code>.
+    <div class="cb"><pre>import json
+from xml.etree import ElementTree
+
+
+def read_project_json(root: str) -> dict:
+    """Wczytuje project.json z katalogu projektu; pusty słownik, gdy pliku nie da się odczytać.
+
+    Po co: z project.json korzystają detect(), find_entrypoints() i imports() - jedno miejsce odczytu.
+    """
+    sciezka = os.path.join(root, "project.json")
+    try:
+        with open(sciezka, encoding="utf-8-sig", errors="replace") as f:
+            dane_projektu = json.load(f)
+    except (OSError, ValueError):
+        dane_projektu = {}
+    return dane_projektu
+
+
+# --- w klasie UiPathTechnology ---
+
+    def detect(self, root: str, files: list[str]) -> bool:
+        """Uznaje projekt za UiPath, gdy w katalogu głównym jest project.json z kluczami typowymi dla UiPatha.
+
+        Po co: implementacja kontraktu Technology.detect(); sam project.json występuje też w innych technologiach.
+        """
+        czy_uipath = False
+        if "project.json" in files:
+            dane_projektu = read_project_json(root)
+            czy_uipath = "main" in dane_projektu and "dependencies" in dane_projektu
+        return czy_uipath</pre></div></li>
+   <li><b>is_source() i find_entrypoints()</b>Kodem są .xaml i .cs. Pliki pomocnicze Studio nie są kodem.
+    <div class="cb"><pre>    def is_source(self, path: str) -> bool:
+        """Traktuje jako kod pliki .xaml (workflowy) i .cs (coded workflows), poza katalogami pomocniczymi Studio.
+
+        Po co: implementacja kontraktu Technology.is_source() - tylko te pliki trafią do analityków.
+        """
+        katalogi_pomocnicze = (".objects/", ".local/", ".settings/", ".screenshots/")
+        czy_kod = path.lower().endswith((".xaml", ".cs")) and not path.startswith(katalogi_pomocnicze)
+        return czy_kod
+
+    def find_entrypoints(self, root: str, files: list[str]) -> list[str]:
+        """Zwraca plik "main" z project.json, potem pliki z listy "entryPoints"; bez project.json - Main.xaml.
+
+        Po co: implementacja kontraktu Technology.find_entrypoints() - opis procesu zaczyna się od startu.
+        """
+        dane_projektu = read_project_json(root)
+        punkty_wejscia = []
+        glowny = dane_projektu.get("main", "").replace("\\", "/")
+        if glowny != "":
+            punkty_wejscia.append(glowny)
+        for wpis in dane_projektu.get("entryPoints", []):
+            sciezka = wpis.get("filePath", "").replace("\\", "/")
+            if sciezka != "" and sciezka not in punkty_wejscia:
+                punkty_wejscia.append(sciezka)
+        if not punkty_wejscia and "Main.xaml" in files:
+            punkty_wejscia.append("Main.xaml")
+        return punkty_wejscia</pre></div></li>
+   <li><b>outline(): szkielet workflowu</b>Najważniejsza metoda dla UiPath, bo surowy XAML jest rozwlekły. Parsuj <code>xml.etree.ElementTree</code>, nazwy tagów bez przestrzeni nazw. Minimalny początek (do rozbudowy o zagnieżdżenie, zmienne, Try Catch, adnotacje, assety Orchestratora według docstringu):
+    <div class="cb"><pre>    def outline(self, root: str, path: str) -> str:
+        """Zwraca szkielet workflowu .xaml: argumenty, wywołania innych workflowów i aktywności z DisplayName.
+
+        Po co: implementacja kontraktu Technology.outline() - logika workflowu bez szumu znaczników XAML.
+        """
+        if not path.lower().endswith(".xaml"):
+            return ""
+        try:
+            drzewo = ElementTree.parse(os.path.join(root, path))
+        except ElementTree.ParseError:
+            return ""
+        linie = []
+        for element in drzewo.getroot().iter():
+            typ = element.tag.split("}")[-1]          # nazwa tagu bez przestrzeni nazw XML
+            nazwa = element.get("DisplayName", "")
+            if typ == "Property":                     # argument workflowu (x:Members)
+                linie.append(f"argument: {element.get('Name')} ({element.get('Type')})")
+            elif typ == "InvokeWorkflowFile":
+                linie.append(f"wywołuje: {element.get('WorkflowFileName')}")
+            elif nazwa != "":
+                linie.append(f"{typ}: {nazwa}")
+        szkielet = "\n".join(linie)
+        return szkielet</pre></div></li>
+   <li><b>imports()</b>internal: <code>WorkflowFileName</code> z <code>InvokeWorkflowFile</code>; external: pakiety aktywności z <code>dependencies</code> w project.json (np. <code>UiPath.Excel.Activities</code>); stdlib: <code>UiPath.System.Activities</code> i przestrzenie .NET albo pusta lista. Pełne nazwy, bez powtórzeń, posortowane.</li>
+   <li><b>config.yaml</b>Pomiń pliki pomocnicze Studio i, jeśli projekty są na REFramework, oznacz szablon jako framework (jego pliki nie trafią do analityków):
+    <div class="cb"><pre>scan:
+  ignore:
+    # ... istniejące wpisy ...
+    - .objects
+    - .local
+    - .settings
+    - .screenshots
+    - "*.tmh"
+  frameworks:
+    reframework: ["Framework/*"]</pre></div></li>
+   <li><b>Wiedza (opcjonalnie)</b><code>rpa_framework.md</code> opisuje już REFramework. Konwencje zespołu dla UiPath dopisz jako nowy plik według przepisu <a href="#ext-framework">Nowy framework w bazie wiedzy</a>.</li>
+   <li><b>Test</b>
+    <div class="cb"><pre>python -m doc_agents.technologies.uipath &lt;katalog projektu UiPath&gt;
+python -m doc_agents.scanner &lt;katalog projektu UiPath&gt;
+python main.py --project &lt;katalog projektu UiPath&gt;</pre></div>
+    <p class="note">Pierwsze polecenie pokazuje wynik albo NotImplementedError każdej metody, drugie mapę projektu (technologia „uipath”, role .xaml = source).</p></li>
+  </ol>
+  <div class="box"><h3>Decyzje do podjęcia przy UiPath</h3>
+   <ul class="ul"><li><b>Pełny XAML czy szkielet?</b> Analityk wysyła pełną treść każdego pliku poniżej <code>analysis.max_file_size_kb</code> (100 KB). Dla XAML szkielet bywa lepszy niż pełna treść. Zmiana wymaga decyzji w rdzeniu (<code>analyst.build_unit_code()</code>), np. nowej metody w kontrakcie technologii.</li><li><b>Jednostka kodu = jeden plik.</b> <code>scanner.build_code_units()</code> tworzy jednostkę z każdego pliku. Grupowanie workflowów w procesy to zmiana w skanerze.</li></ul></div>
+ </div>
+
+ <!-- framework KB -->
+ <div class="recipe" id="ext-framework">
+  <h2>Nowy framework w bazie wiedzy</h2>
+  <p class="when">Kiedy: framework działa w już obsługiwanej technologii (np. kolejny framework RPA w Pythonie). Bez zmian w kodzie.</p>
+  <div class="files"><span class="c f new">knowledge/&lt;framework&gt;.md <small>nowy</small></span><span class="c f">knowledge/index.md <small>nowy wpis</small></span><span class="c f">config.yaml <small>scan.frameworks, gdy framework jest skopiowany do projektu</small></span></div>
+  <ol class="road">
+   <li><b>Plik wiedzy</b>Wzór: <code>rpa_framework.md</code>. Pisz to, czego model nie wyczyta z jednego pliku: ukryty przepływ sterowania, metody wywoływane przez framework, rodzaje błędów, gdzie jest konfiguracja.
+    <div class="cb"><pre># &lt;Nazwa frameworku&gt; - jak go rozpoznać i opisać
+
+## Rozpoznanie
+- Importy, klasy bazowe, pliki charakterystyczne.
+- Pakiet (pip) czy katalog skopiowany do projektu.
+
+## Przepływ sterowania
+- Które metody robota wywołuje framework i w jakiej kolejności (start, pobranie danych, element, błąd, koniec).
+
+## Błędy
+- Wyjątek błędu biznesowego (element pomijany) i technicznego (ponowienie, zatrzymanie).
+
+## Konfiguracja i sekrety
+- Skąd framework bierze konfigurację, jak przekazuje poświadczenia.
+
+## Co analityk ma wskazać
+- Lista konkretnych rzeczy do opisania w notatce.</pre></div></li>
+   <li><b>Wpis w spisie</b><code>knowledge/index.md</code>, blok oddzielony pustą linią. Planista widzi tylko ten wpis, więc „Kiedy użyć” musi pozwolić mu zdecydować:
+    <div class="cb"><pre>&lt;framework&gt;.md
+Kiedy użyć: projekt oparty na &lt;framework&gt; (importy &lt;pakiet&gt;, klasa robota dziedziczy po &lt;Klasa&gt;) - które metody wywołuje framework, jak rozróżnia błędy, skąd bierze konfigurację.
+Tagi: rpa, framework, &lt;framework&gt;, analityk</pre></div></li>
+   <li><b>Framework skopiowany do projektu</b>Jeśli kod frameworku leży w katalogu robota, oznacz go, żeby nie był analizowany jak kod robota. Wzorce porównywane z całą ścieżką względną z „/”:
+    <div class="cb"><pre>scan:
+  frameworks:
+    roboforge: ["roboforge_framework/*"]</pre></div></li>
+   <li><b>Test</b>Czy spis się czyta, a planista wybiera nowy plik dla projektu na tym frameworku:
+    <div class="cb"><pre>python -m doc_agents.knowledge &lt;framework&gt;.md
+python -m doc_agents.agents.planner &lt;katalog projektu&gt;</pre></div>
+    <p class="note">W wydruku planu sprawdź „Pliki wiedzy - analitycy”. Uwaga: test planisty czyści output/.</p></li>
+  </ol>
+ </div>
+
+ <!-- Robot Framework -->
+ <div class="recipe" id="ext-robot">
+  <h2>Robot Framework</h2>
+  <p class="when">Kiedy: projekty w Robot Framework (pliki .robot i .resource, słowa kluczowe, często biblioteki RPA Framework). To inny format kodu niż .py, więc potrzebne są oba poziomy: technologia i wiedza.</p>
+  <div class="files"><span class="c f new">technologies/robotframework.py <small>nowy</small></span><span class="c f">technologies/__init__.py <small>wpis w rejestrze</small></span><span class="c f new">knowledge/robot_framework.md <small>nowy</small></span><span class="c f">knowledge/index.md</span><span class="c f">config.yaml <small>scan.ignore</small></span></div>
+  <ol class="road">
+   <li><b>Technologia: detect, is_source, punkty wejścia</b>Projekty RF mają własne biblioteki słów kluczowych w .py, więc <code>is_source()</code> obejmuje też .py, a szkielety i importy plików .py deleguje do <code>PythonTechnology</code>. Dzięki temu nowy plik nie importuje <code>ast</code> (reguła z AGENTS.md).
+    <div class="cb"><pre>"""Obsługa technologii Robot Framework (podklasa Technology).
+
+Co robi: rozpoznaje projekty z plikami .robot, buduje szkielety sekcji (Tasks, Keywords, Settings)
+i importy (Library, Resource, Variables). Pliki .py (biblioteki słów kluczowych) obsługuje PythonTechnology.
+
+Test ręczny: python -m doc_agents.technologies.robotframework &lt;katalog projektu&gt;
+"""
+
+import os
+import re
+
+from doc_agents.technologies.base import Technology
+from doc_agents.technologies.python import PythonTechnology
+
+
+def robot_sections(root: str, path: str) -> dict[str, list[str]]:
+    """Dzieli plik .robot/.resource na sekcje: nazwa sekcji małymi literami -> linie sekcji.
+
+    Po co: punkty wejścia, szkielet i importy korzystają z tego samego podziału pliku.
+    """
+    sekcje = {}
+    biezaca = ""
+    with open(os.path.join(root, path), encoding="utf-8-sig", errors="replace") as f:
+        for linia in f.read().splitlines():
+            if linia.startswith("*"):
+                biezaca = linia.strip("* ").lower()     # np. "tasks", "keywords", "settings"
+                sekcje[biezaca] = []
+            elif biezaca != "":
+                sekcje[biezaca].append(linia)
+    return sekcje
+
+
+class RobotFrameworkTechnology(Technology):
+    """Projekty Robot Framework (w tym RPA Framework)."""
+
+    name = "robotframework"
+
+    def __init__(self):
+        """Tworzy pomocniczą obsługę Pythona dla bibliotek słów kluczowych (.py) w projekcie.
+
+        Po co: szkielety i importy .py buduje istniejąca PythonTechnology - bez duplikowania kodu i bez importu ast.
+        """
+        self.python = PythonTechnology()
+
+    def detect(self, root: str, files: list[str]) -> bool:
+        """Uznaje projekt za Robot Framework, gdy jest w nim choć jeden plik .robot.
+
+        Po co: implementacja kontraktu Technology.detect(); rejestr sprawdza RF przed Pythonem.
+        """
+        czy_robot = any(path.lower().endswith(".robot") for path in files)
+        return czy_robot
+
+    def is_source(self, path: str) -> bool:
+        """Traktuje jako kod pliki .robot, .resource i biblioteki słów kluczowych .py.
+
+        Po co: implementacja kontraktu Technology.is_source() - wszystkie te pliki trafią do analityków.
+        """
+        czy_kod = path.lower().endswith((".robot", ".resource")) or self.python.is_source(path)
+        return czy_kod
+
+    def find_entrypoints(self, root: str, files: list[str]) -> list[str]:
+        """Zwraca pliki .robot z sekcją Tasks albo Test Cases - to je uruchamia polecenie robot.
+
+        Po co: implementacja kontraktu Technology.find_entrypoints().
+        """
+        punkty_wejscia = []
+        for path in files:
+            if path.lower().endswith(".robot"):
+                sekcje = robot_sections(root, path)
+                if "tasks" in sekcje or "test cases" in sekcje:
+                    punkty_wejscia.append(path)
+        return punkty_wejscia</pre></div></li>
+   <li><b>Technologia: outline() i imports()</b>Szkielet: lista sekcji, nazwy zadań i słów kluczowych (linie bez wcięcia w sekcjach Tasks, Test Cases, Keywords) z pierwszą linią <code>[Documentation]</code> i <code>[Arguments]</code>, w Settings: Library, Resource, Variables, Suite Setup/Teardown. Z sekcji Variables tylko nazwy, nigdy wartości (mogą być sekretami).
+    <div class="cb"><pre>    def imports(self, root: str, path: str) -> dict[str, list[str]]:
+        """Zwraca zależności z sekcji Settings: Resource i Variables jako internal, biblioteki standardowe RF
+        jako stdlib, pozostałe Library jako external. Dla .py deleguje do PythonTechnology.
+
+        Po co: implementacja kontraktu Technology.imports().
+        """
+        if self.python.is_source(path):
+            return self.python.imports(root, path)
+        biblioteki_standardowe = {"BuiltIn", "Collections", "DateTime", "Dialogs", "OperatingSystem",
+                                  "Process", "Screenshot", "String", "Telnet", "XML"}
+        grupy = {"internal": [], "external": [], "stdlib": []}
+        for linia in robot_sections(root, path).get("settings", []):
+            czesci = re.split(r"\s{2,}|\t", linia.strip())   # RF oddziela komórki 2+ spacjami lub tabulatorem
+            if len(czesci) &lt; 2:
+                continue
+            rodzaj, nazwa = czesci[0].lower(), czesci[1]
+            if rodzaj in ("resource", "variables") or nazwa.endswith(".py"):
+                grupa = "internal"
+            elif rodzaj == "library" and nazwa in biblioteki_standardowe:
+                grupa = "stdlib"
+            elif rodzaj == "library":
+                grupa = "external"
+            else:
+                continue
+            if nazwa not in grupy[grupa]:
+                grupy[grupa].append(nazwa)
+        importy_w_grupach = {nazwa_grupy: sorted(moduly) for nazwa_grupy, moduly in grupy.items()}
+        return importy_w_grupach</pre></div>
+    <p class="note"><code>outline()</code> zbuduj analogicznie na <code>robot_sections()</code>; dla .py: <code>return self.python.outline(root, path)</code>. Dodaj <code>manual_test()</code> na wzór <code>python.py</code>.</p></li>
+   <li><b>Rejestr</b>RF przed Pythonem, bo projekt RF zawiera pliki .py:
+    <div class="cb"><pre>def available_technologies() -> list[Technology]:
+    from doc_agents.technologies.python import PythonTechnology
+    from doc_agents.technologies.robotframework import RobotFrameworkTechnology
+    from doc_agents.technologies.uipath import UiPathTechnology
+
+    technologie = [
+        UiPathTechnology(),
+        RobotFrameworkTechnology(),
+        PythonTechnology(),
+    ]
+    return technologie</pre></div></li>
+   <li><b>Plik wiedzy i wpis w spisie</b>W <code>robot_framework.md</code> opisz: zadania wykonywane po kolei przez polecenie <code>robot</code>, słowa kluczowe jako odpowiednik funkcji, Setup/Teardown, obsługę błędów (TRY/EXCEPT, Run Keyword And Ignore Error), biblioteki RPA Framework (przeglądarka, Excel, poświadczenia z Vault), pliki konfiguracji środowiska.
+    <div class="cb"><pre>robot_framework.md
+Kiedy użyć: projekt w Robot Framework (technologia robotframework w mapie projektu, pliki .robot/.resource) - jak czytać sekcje Tasks i Keywords, Setup/Teardown, obsługa błędów, biblioteki RPA Framework, skąd robot bierze poświadczenia.
+Tagi: robot framework, rpaframework, słowa kluczowe, analityk, redaktor</pre></div></li>
+   <li><b>config.yaml</b>Wyniki uruchomień RF nie są kodem robota:
+    <div class="cb"><pre>scan:
+  ignore:
+    # ... istniejące wpisy ...
+    - output.xml
+    - log.html
+    - report.html</pre></div></li>
+   <li><b>Test</b>
+    <div class="cb"><pre>python -m doc_agents.technologies.robotframework &lt;katalog projektu RF&gt;
+python -m doc_agents.scanner &lt;katalog projektu RF&gt;
+python main.py --project &lt;katalog projektu RF&gt;</pre></div></li>
+  </ol>
+ </div>
+
+ <!-- NICE -->
+ <div class="recipe" id="ext-nice">
+  <h2>NICE RPA</h2>
+  <p class="when">Kiedy: projekty z platformy NICE Robotic Automation. Ten przepis jest wzorcem: format plików projektu trzeba najpierw ustalić z zespołem, który z NICE pracuje.</p>
+  <div class="files"><span class="c f new">technologies/nice.py <small>nowy</small></span><span class="c f">technologies/__init__.py</span><span class="c f new">knowledge/nice_rpa.md <small>nowy</small></span><span class="c f">knowledge/index.md</span><span class="c f">config.yaml</span></div>
+  <ol class="road">
+   <li><b>Ustal format projektu</b>Bez tego nie da się napisać technologii. Do ustalenia:
+    <ul class="ul"><li>Jakie pliki tworzą projekt na dysku i jakie mają rozszerzenia.</li><li>Czy format jest tekstowy (XML, JSON) czy binarny. Binarny wymaga eksportu do tekstu przed użyciem doc-agents.</li><li>Co jest punktem wejścia i jak wywoływane są podprocesy lub moduły.</li><li>Gdzie jest konfiguracja i jak przekazywane są poświadczenia.</li><li>Które pliki są wynikami, logami albo plikami pomocniczymi edytora.</li></ul></li>
+   <li><b>Klasa technologii</b>Ten sam kontrakt co Python i UiPath. Zacznij od kopii <code>uipath.py</code> (pusta klasa z opisami) i zmień nazwę:
+    <div class="cb"><pre>class NiceTechnology(Technology):
+    """Projekty NICE RPA - implementacja po ustaleniu formatu plików."""
+
+    name = "nice"
+
+    def detect(self, root: str, files: list[str]) -> bool:
+        """Uznaje projekt za NICE RPA po pliku charakterystycznym dla tej platformy (do ustalenia).
+
+        Po co: implementacja kontraktu Technology.detect(); musi być pewne, bo NICE stoi w rejestrze przed Pythonem.
+        """
+        return False   # do czasu implementacji narzędzie nigdy nie wybiera tej technologii
+
+    # is_source, find_entrypoints, outline, imports - jak w uipath.py:
+    # metody rzucają NotImplementedError z opisem, co uchwycić</pre></div></li>
+   <li><b>Szkielet ważniejszy niż pełna treść</b>Jeśli pliki są w XML, <code>outline()</code> buduj jak dla UiPath (<code>xml.etree.ElementTree</code>): nazwy kroków, wywołania podprocesów, aplikacje docelowe, obsługa błędów, nazwy poświadczeń bez wartości. Przy formacie binarnym <code>is_source()</code> musi zwracać <code>False</code> do czasu eksportu, inaczej analityk dostanie nieczytelną treść.</li>
+   <li><b>Rejestr, wiedza, config</b><code>NiceTechnology()</code> w <code>available_technologies()</code> przed <code>PythonTechnology()</code>. Plik <code>nice_rpa.md</code> według szablonu z przepisu <a href="#ext-framework">Nowy framework w bazie wiedzy</a> i wpis w <code>index.md</code>. Pliki pomocnicze edytora do <code>scan.ignore</code>.</li>
+   <li><b>Test</b>Jak dla UiPath: test ręczny technologii, skaner, pełny przebieg.</li>
+  </ol>
+ </div>
+
+ <!-- szablony -->
+ <div class="recipe" id="ext-szablony">
+  <h2>Pola i rozdziały dokumentu</h2>
+  <p class="when">Kiedy: zmiana standardu dokumentacji. Kod nie zna konkretnych pól ani rozdziałów.</p>
+  <div class="cols">
+   <div class="box"><h3>Nowe pole części formalnej</h3><p>Wpis w <code>templates/formal_template.yaml</code>. Szablon <code>formal_template.md</code> ma pętlę po polach, więc nie wymaga zmian.</p>
+    <div class="cb"><pre>  - name: harmonogram
+    title: Harmonogram uruchomień
+    type: text          # text | list
+    required: false
+    source: llm         # llm | scanner
+    instruction: >
+      Kiedy i jak często robot jest uruchamiany,
+      jeśli wynika to z kodu lub konfiguracji.</pre></div>
+    <p class="note">Pole z mapy projektu bez modelu: <code>source: scanner</code> i <code>scanner: entrypoints</code> albo <code>scanner: role:config</code>. Nowy rodzaj źródła skanera wymaga kodu w <code>editor.scanner_value()</code>.</p></div>
+   <div class="box"><h3>Nowy stały rozdział</h3><p>Wpis w <code>templates/descriptive_template.yaml</code>. Planista przepisuje go do planu, redaktor pisze, kod sprawdza obecność, gdy <code>required: true</code>.</p>
+    <div class="cb"><pre>  - title: Zależności zewnętrzne
+    required: false
+    instruction: >
+      Wymień biblioteki i systemy spoza
+      projektu, przy każdej: do czego służy.</pre></div>
+    <p class="note">Układ całego dokumentu: <code>templates/document_template.md</code>.</p></div>
+  </div>
+  <p class="note" style="margin-top:12px">Test: <code>python -m doc_agents.knowledge</code> (odczyt szablonów), potem <code>python -m doc_agents.agents.editor</code> na wynikach poprzedniego przebiegu (nie czyści output/).</p>
+ </div>
+
+ <!-- model -->
+ <div class="recipe" id="ext-model">
+  <h2>Model i dostawca</h2>
+  <p class="when">Kiedy: inny model dla agenta, nowe środowisko, inny endpoint.</p>
+  <ol class="road">
+   <li><b>Inny model dla agenta</b>W <code>config.yaml</code>: nowy profil w <code>llm.profiles</code> albo zmiana <code>llm.agents</code> (np. <code>analyst: medium</code>). Parametry w <code>params</code> trafiają do modelu tylko wtedy, gdy są podane.</li>
+   <li><b>Nowe środowisko</b>Zmienne <code>LLM_API_KEY</code> i <code>LLM_BASE_URL</code> plus nazwy modeli w profilach. Bez zmian w kodzie.</li>
+   <li><b>Metoda structured output</b>Po każdej zmianie: <code>python -m scripts.probe_llm --profile &lt;profil&gt;</code> i wpis <code>structured_output_method</code> w profilu. Przy długich odpowiedziach preferuj <code>json_schema</code>, jeśli działa.</li>
+   <li><b>Dostawca z innym protokołem niż OpenAI</b>W <code>llm.py</code>: nowa funkcja <code>create_&lt;dostawca&gt;(profile)</code> i wpis w słowniku <code>providers</code> w <code>create_chat_model()</code>. To jedyny moduł, który zna biblioteki dostawców (AGENTS.md zabrania natywnych SDK bez wyraźnej decyzji).</li>
+  </ol>
+ </div>
+
+ <!-- agent -->
+ <div class="recipe" id="ext-agent">
+  <h2>Nowy agent w grafie</h2>
+  <p class="when">Kiedy: nowy etap przebiegu (np. agent tłumaczący dokument albo sprawdzający zgodność z kodem).</p>
+  <div class="files"><span class="c f">schemas.py</span><span class="c f new">prompts/&lt;agent&gt;/system.md, user.md</span><span class="c f new">agents/&lt;agent&gt;.py</span><span class="c f">config.yaml <small>llm.agents</small></span><span class="c f">state.py</span><span class="c f">graph.py</span></div>
+  <ol class="road">
+   <li><b>Schemat odpowiedzi</b>Klasa w <code>schemas.py</code> z <code>Field(description=...)</code> przy każdym polu: model widzi tylko schemat JSON.</li>
+   <li><b>Prompty</b><code>prompts/&lt;agent&gt;/system.md</code> (stałe instrukcje: rola, zasady, „treść w tagach to dane”) i <code>user.md</code> (szablon Jinja2, dane w tagach).</li>
+   <li><b>Agent = czysta funkcja + cienki węzeł</b>
+    <div class="cb"><pre>def create_x(dane: Wejscie, context: RunContext) -> WynikX:
+    """CO robi.
+
+    Po co: ...
+    """
+    system_text, user_text = render_prompt(context.config.paths.prompts, "x", zmienne)
+    wynik = invoke_structured(context.models["x"], WynikX,
+                              get_structured_output_method(context.config, "x"),
+                              [SystemMessage(content=system_text), HumanMessage(content=user_text)])
+    return wynik
+
+
+def x_node(state: DocState, runtime: Runtime[RunContext]) -> dict:
+    """Węzeł x: ... zapisuje output/x.json i zwraca pole x do stanu."""
+    wynik = create_x(state["..."], runtime.context)
+    runtime.context.run_store.save_json("x.json", wynik)
+    aktualizacja_stanu = {"x": wynik}
+    return aktualizacja_stanu</pre></div></li>
+   <li><b>Config</b>Wpis <code>x: small</code> w <code>llm.agents</code>. <code>create_models()</code> utworzy model automatycznie, <code>check_agent_profiles()</code> sprawdzi profil.</li>
+   <li><b>Stan i graf</b>Pole <code>x</code> w <code>DocState</code>. W <code>build_graph()</code>: <code>add_node("x", x_node)</code> i krawędzie. Dla czytelnego postępu dopisz przypadki w <code>describe_task()</code> i <code>describe_result()</code>.</li>
+   <li><b>Test</b><code>manual_test()</code> w nowym module (najlepiej na wynikach poprzedniego przebiegu, <code>create_run_context(config, clear_output=False)</code>), potem pełny przebieg.</li>
+  </ol>
+ </div>
+</section>
+
+<!-- ====================== PRZEWODNIK ====================== -->
+<section class="tab" id="przewodnik" hidden>
+ <h1>Przewodnik dewelopera: od ogółu do szczegółów</h1>
+ <p class="lead">Jak myśleć o tym kodzie, w jakiej kolejności go czytać, jak testować zmiany i gdzie szukać przyczyny błędu.</p>
+
+ <h2>Całość w pięciu zdaniach</h2>
+ <ul class="ul">
+  <li><code>main.py</code> wczytuje config, tworzy <code>RunContext</code> i uruchamia graf z <code>graph.py</code>.</li>
+  <li>Skaner bez AI buduje mapę projektu, korzystając z wtyczki technologii (dziś Python).</li>
+  <li>Planista dzieli pracę, analitycy równolegle opisują po jednej jednostce kodu, redaktor składa dokument z notatek i szablonów.</li>
+  <li>Recenzent łączy braki policzone kodem z oceną modelu. Odrzucony dokument wraca do redaktora, najwyżej <code>max_review_rounds</code> razy.</li>
+  <li>Każdy etap zapisuje swój wynik w <code>output/</code>, a <code>final.md</code> to ostatnia wersja dokumentu.</li>
+ </ul>
+
+ <h2>Zasady architektury, których pilnujemy</h2>
+ <div class="cols">
+  <div class="box"><h3>Agent = czysta funkcja + cienki węzeł</h3><p>Logika (<code>create_plan</code>, <code>create_note</code>…) działa bez grafu. Węzeł tylko wyjmuje dane ze stanu, woła funkcję, zapisuje wynik i zwraca zmienione pola.</p></div>
+  <div class="box"><h3>Stan to dane, kontekst to narzędzia</h3><p><code>DocState</code> niesie wyniki etapów (chude: ścieżki i metadane). <code>RunContext</code> niesie config, modele i zapis. Modeli nie wkładamy do stanu.</p></div>
+  <div class="box"><h3>Rdzeń nie zna technologii</h3><p>Tylko <code>technologies/python.py</code> importuje <code>ast</code>. Skaner i analityk pytają kontrakt <code>Technology</code>.</p></div>
+  <div class="box"><h3>Jeden punkt dostępu do modeli</h3><p>Tylko <code>llm.py</code> importuje <code>langchain_openai</code>. Każde wywołanie przez <code>invoke_structured()</code> (ponowienie, czytelny błąd).</p></div>
+  <div class="box"><h3>Treść poza kodem</h3><p>Prompty w <code>prompts/</code>, pola i rozdziały w <code>knowledge_base/templates/</code>, reguły skanu i modele w <code>config.yaml</code>. Konkretnych pól nie wpisujemy w kod.</p></div>
+  <div class="box"><h3>Bezpieczeństwo danych</h3><p>Sekrety tylko jako metadane. Dane w promptach w tagach. Nazwy plików od modelu przechodzą przez <code>read_kb_file()</code> i <code>find_code_unit()</code>.</p></div>
+ </div>
+
+ <h2>Warstwy i zależności między modułami</h2>
+ <div class="layers">
+  <div class="ly"><b>Wejście</b><div><span class="c">main.py</span></div></div>
+  <div class="ly"><b>Orkiestracja</b><div><span class="c">graph.py</span><span class="c">state.py</span><span class="c">context.py</span></div></div>
+  <div class="ly"><b>Agenci</b><div><span class="c">agents/planner.py</span><span class="c">agents/analyst.py</span><span class="c">agents/editor.py</span><span class="c">agents/reviewer.py</span></div></div>
+  <div class="ly"><b>Usługi</b><div><span class="c">llm.py</span><span class="c">prompts.py</span><span class="c">knowledge.py</span><span class="c">scanner.py</span><span class="c">output.py</span></div></div>
+  <div class="ly"><b>Technologie</b><div><span class="c">technologies/__init__.py</span><span class="c">base.py</span><span class="c">python.py</span><span class="c">uipath.py</span></div></div>
+  <div class="ly"><b>Podstawy</b><div><span class="c">config.py</span><span class="c">schemas.py</span></div></div>
+  <div class="ly"><b>Treść (bez kodu)</b><div><span class="c f">config.yaml</span><span class="c f">prompts/</span><span class="c f">knowledge_base/</span></div></div>
+ </div>
+ <p class="note" style="margin-top:10px">Importy idą z góry na dół. Wyjątki: <code>reviewer.py</code> korzysta z funkcji pomocniczych <code>editor.py</code> (<code>build_notes_text</code>, <code>build_editor_kb_text</code>, <code>load_notes</code>), a <code>output.py</code> importuje skaner na potrzeby testu ręcznego.</p>
+
+ <h2>Kolejność czytania kodu</h2>
+ <ol class="road">
+  <li><b>AGENTS.md</b>Zasady i słownik decyzji. 10 minut, oszczędza godziny.</li>
+  <li><b>main.py, potem graph.py</b>Spis treści przebiegu i kolejność węzłów. Docstring <code>graph.py</code> opisuje cały graf.</li>
+  <li><b>state.py i schemas.py</b>Co płynie między etapami. Każde pole ma komentarz.</li>
+  <li><b>context.py i config.py</b>Skąd węzły biorą modele, ścieżki i ustawienia.</li>
+  <li><b>scanner.py i technologies/</b>Jak powstaje mapa projektu.</li>
+  <li><b>agents/ w kolejności: planner, analyst, editor, reviewer</b>Razem z ich promptami w <code>prompts/</code>: prompt i funkcja budująca zmienne to para.</li>
+  <li><b>llm.py, prompts.py, knowledge.py, output.py</b>Usługi wspólne, czytaj, gdy trafisz na nie w agentach.</li>
+ </ol>
+
+ <h2>Konwencje kodu</h2>
+ <ul class="ul">
+  <li>Każda funkcja ma docstring: pierwszy akapit CO robi, drugi zaczyna się od <code>Po co:</code>. Pierwszy akapit trafia też do szkieletów plików.</li>
+  <li>Logika zwraca wartości, wypisuje tylko <code>print_*()</code>. Plik podzielony sekcjami <code># --- Nazwa ---</code>.</li>
+  <li>Każdy moduł kończy się <code>manual_test()</code> wołanym w <code>if __name__ == "__main__":</code>. Uruchamiamy przez <code>python -m</code> z katalogu repo.</li>
+  <li>Ścieżki tylko <code>os.path</code>, jako <code>str</code>. Pliki <code>encoding="utf-8"</code>, obce dodatkowo <code>errors="replace"</code>.</li>
+  <li>Prostota: bez walidatorów Pydantic, <code>Literal</code>, <code>ConfigDict</code>. Wyjątek: <code>Field(description=...)</code> w schematach odpowiedzi modelu.</li>
+  <li>Wynik przed <code>return</code> w zmiennej o opisowej, często polskiej nazwie (<code>aktualizacja_stanu</code>, <code>komunikat_bledu</code>).</li>
+ </ul>
+
+ <h2>Testy ręczne</h2>
+ <div class="scroll">
+ <table class="stack">
+  <thead><tr><th>Polecenie</th><th>Co sprawdza</th><th>Model</th><th>output/</th></tr></thead>
+  <tbody>
+   <tr><td data-l="Polecenie"><code>python -m doc_agents.config</code></td><td data-l="Co sprawdza">wczytanie configu, profile agentów</td><td data-l="Model">nie</td><td data-l="output/">bez zmian</td></tr>
+   <tr><td data-l="Polecenie"><code>python -m doc_agents.llm</code></td><td data-l="Co sprawdza">jedno krótkie wywołanie modelu planisty</td><td data-l="Model" class="yes">tak</td><td data-l="output/">bez zmian</td></tr>
+   <tr><td data-l="Polecenie"><code>python -m scripts.probe_llm --profile small</code></td><td data-l="Co sprawdza">możliwości modelu i endpointu</td><td data-l="Model" class="yes">tak</td><td data-l="output/">bez zmian</td></tr>
+   <tr><td data-l="Polecenie"><code>python -m doc_agents.scanner &lt;projekt&gt;</code></td><td data-l="Co sprawdza">tabela plików z rolami, punkty wejścia, jednostki</td><td data-l="Model">nie</td><td data-l="output/">bez zmian</td></tr>
+   <tr><td data-l="Polecenie"><code>python -m doc_agents.technologies.python &lt;projekt&gt; [plik]</code></td><td data-l="Co sprawdza">detect, punkty wejścia; szkielet i importy pliku</td><td data-l="Model">nie</td><td data-l="output/">bez zmian</td></tr>
+   <tr><td data-l="Polecenie"><code>python -m doc_agents.knowledge [plik]</code></td><td data-l="Co sprawdza">spis, szablony, blokada ścieżek spoza bazy</td><td data-l="Model">nie</td><td data-l="output/">bez zmian</td></tr>
+   <tr><td data-l="Polecenie"><code>python -m doc_agents.prompts</code></td><td data-l="Co sprawdza">renderowanie promptu, błąd przy brakującej zmiennej</td><td data-l="Model">nie</td><td data-l="output/">bez zmian</td></tr>
+   <tr><td data-l="Polecenie"><code>python -m doc_agents.context</code></td><td data-l="Co sprawdza">budowa RunContext (wymaga zmiennych)</td><td data-l="Model">nie</td><td data-l="output/" class="warn">czyści</td></tr>
+   <tr><td data-l="Polecenie"><code>python -m doc_agents.agents.planner &lt;projekt&gt;</code></td><td data-l="Co sprawdza">plan dla projektu</td><td data-l="Model" class="yes">tak</td><td data-l="output/" class="warn">czyści, zapisuje plan.json</td></tr>
+   <tr><td data-l="Polecenie"><code>python -m doc_agents.agents.analyst &lt;projekt&gt; [jednostka]</code></td><td data-l="Co sprawdza">notatka jednej jednostki</td><td data-l="Model" class="yes">tak</td><td data-l="output/">wymaga plan.json (zachowuje go)</td></tr>
+   <tr><td data-l="Polecenie"><code>python -m doc_agents.agents.editor</code></td><td data-l="Co sprawdza">dokument z mapy, planu i notatek</td><td data-l="Model" class="yes">tak (2×)</td><td data-l="output/">wymaga wyników przebiegu, nie czyści</td></tr>
+   <tr><td data-l="Polecenie"><code>python -m doc_agents.agents.reviewer</code></td><td data-l="Co sprawdza">recenzja ostatniego dokumentu</td><td data-l="Model" class="yes">tak</td><td data-l="output/">wymaga wyników przebiegu, nie czyści</td></tr>
+   <tr><td data-l="Polecenie"><code>python -m doc_agents.graph &lt;projekt&gt;</code></td><td data-l="Co sprawdza">cały graf i stan końcowy</td><td data-l="Model" class="yes">tak</td><td data-l="output/" class="warn">czyści</td></tr>
+  </tbody>
+ </table>
+ </div>
+ <p class="note">Tryb pracy nad promptem redaktora albo recenzenta: raz pełny przebieg <code>main.py</code>, potem wielokrotnie test ręczny agenta na tych samych danych. Bez ponownej analizy i bez kosztu wcześniejszych etapów.</p>
+
+ <h2>Diagnoza błędów</h2>
+ <div class="scroll">
+ <table class="stack">
+  <thead><tr><th>Objaw</th><th>Gdzie</th><th>Co zrobić</th></tr></thead>
+  <tbody>
+   <tr><td data-l="Objaw">„Brak zmiennej środowiskowej 'LLM_…'”</td><td data-l="Gdzie"><code>llm.read_env()</code></td><td data-l="Co zrobić">Ustaw zmienną użytkownika i otwórz nowy terminal.</td></tr>
+   <tr><td data-l="Objaw">„Agent 'x' wskazuje nieistniejący profil”</td><td data-l="Gdzie"><code>config.check_agent_profiles()</code></td><td data-l="Co zrobić">Popraw <code>llm.agents</code> albo dodaj profil.</td></tr>
+   <tr><td data-l="Objaw">„Model nie zwrócił odpowiedzi zgodnej ze schematem X”</td><td data-l="Gdzie"><code>llm.invoke_structured()</code></td><td data-l="Co zrobić">Zobacz <code>finish_reason</code> i błąd parsowania w komunikacie. Przy <code>function_calling</code> rozważ <code>json_schema</code> (probe_llm).</td></tr>
+   <tr><td data-l="Objaw">„Odpowiedź modelu ucięta na limicie max_tokens”</td><td data-l="Gdzie"><code>llm.build_length_error_message()</code></td><td data-l="Co zrobić">Końcówka odpowiedzi: powtarzający się fragment = model się zapętlił; zwykły tekst = zwiększ <code>max_tokens</code> w profilu.</td></tr>
+   <tr><td data-l="Objaw">„Jednostki 'x' nie ma w mapie projektu”</td><td data-l="Gdzie"><code>analyst.find_code_unit()</code></td><td data-l="Co zrobić">Planista zmyślił albo przekręcił nazwę. Sprawdź <code>plan.json</code> i prompt planisty.</td></tr>
+   <tr><td data-l="Objaw">„Plik spoza bazy wiedzy: …”</td><td data-l="Gdzie"><code>knowledge.read_kb_file()</code></td><td data-l="Co zrobić">Planista wskazał plik spoza spisu. Sprawdź nazwy w <code>index.md</code> i <code>plan.json</code>.</td></tr>
+   <tr><td data-l="Objaw">„Prompt x/user.md: brak zmiennej w danych”</td><td data-l="Gdzie"><code>prompts.render_prompt()</code></td><td data-l="Co zrobić">Zmienna dodana w <code>user.md</code>, a nie w funkcji budującej zmienne agenta (np. <code>build_planner_variables</code>).</td></tr>
+   <tr><td data-l="Objaw">„Nieznane źródło skanera w formal_template.yaml”</td><td data-l="Gdzie"><code>editor.scanner_value()</code></td><td data-l="Co zrobić">Dozwolone tylko <code>entrypoints</code> i <code>role:&lt;rola&gt;</code>.</td></tr>
+   <tr><td data-l="Objaw">„_Brak danych._” w dokumencie</td><td data-l="Gdzie"><code>formal_missing.txt</code>, <code>descriptive_missing.txt</code></td><td data-l="Co zrobić">Zobacz notatki: czy analitycy w ogóle zebrali tę informację.</td></tr>
+   <tr><td data-l="Objaw">Dokument nie zaakceptowany po limicie rund</td><td data-l="Gdzie"><code>review_NN.json</code>, <code>document_NN.md</code></td><td data-l="Co zrobić">Czy uwagi są nowe w każdej rundzie (recenzent niewyczerpujący), czy redaktor ich nie poprawia.</td></tr>
+   <tr><td data-l="Objaw">Technologia „(nie rozpoznano)”, brak punktów wejścia</td><td data-l="Gdzie"><code>technologies.detect_technology()</code></td><td data-l="Co zrobić">Żadna technologia nie rozpoznała projektu albo wszystkie pliki źródłowe są w <code>scan.ignore</code>.</td></tr>
+   <tr><td data-l="Objaw">Brakuje pliku w mapie projektu</td><td data-l="Gdzie"><code>scanner.list_files()</code></td><td data-l="Co zrobić">Wzorzec w <code>scan.ignore</code> albo plik leży w katalogu z <code>pyvenv.cfg</code>.</td></tr>
+   <tr><td data-l="Objaw">Analityk opisał duży plik ogólnikowo</td><td data-l="Gdzie"><code>analyst.build_unit_code()</code></td><td data-l="Co zrobić">Plik ponad <code>analysis.max_file_size_kb</code> idzie tylko jako szkielet.</td></tr>
+   <tr><td data-l="Objaw">Bramka odrzuca zapytania (limit)</td><td data-l="Gdzie"><code>analysis.max_concurrency</code></td><td data-l="Co zrobić">Zmniejsz liczbę równoczesnych analityków.</td></tr>
+   <tr><td data-l="Objaw">Błąd w treści dokumentu</td><td data-l="Gdzie"><code>notes/*.json</code></td><td data-l="Co zrobić">Najpierw notatka: jeśli tam jest błąd, poprawiaj prompt analityka; jeśli nie, prompt redaktora.</td></tr>
+  </tbody>
+ </table>
+ </div>
+
+ <h2>Gdzie co zmienić</h2>
+ <div class="scroll">
+ <table class="stack">
+  <thead><tr><th>Chcę…</th><th>Plik</th><th>Kod?</th></tr></thead>
+  <tbody>
+   <tr><td data-l="Chcę">poprawić jakość lub styl opisu</td><td data-l="Plik"><code>prompts/&lt;agent&gt;/system.md</code>, <code>knowledge/documentation_goals.md</code></td><td data-l="Kod?">nie</td></tr>
+   <tr><td data-l="Chcę">dodać pole formalne lub stały rozdział</td><td data-l="Plik"><code>templates/formal_template.yaml</code>, <code>templates/descriptive_template.yaml</code></td><td data-l="Kod?">nie</td></tr>
+   <tr><td data-l="Chcę">zmienić układ dokumentu</td><td data-l="Plik"><code>templates/document_template.md</code>, <code>templates/formal_template.md</code></td><td data-l="Kod?">nie</td></tr>
+   <tr><td data-l="Chcę">pominąć katalog lub typ pliku przy skanie</td><td data-l="Plik"><code>config.yaml</code>: <code>scan.ignore</code>, <code>scan.role_patterns</code></td><td data-l="Kod?">nie</td></tr>
+   <tr><td data-l="Chcę">oznaczyć framework skopiowany do projektu</td><td data-l="Plik"><code>config.yaml</code>: <code>scan.frameworks</code></td><td data-l="Kod?">nie</td></tr>
+   <tr><td data-l="Chcę">zmienić model agenta lub liczbę rund recenzji</td><td data-l="Plik"><code>config.yaml</code>: <code>llm.agents</code>, <code>limits.max_review_rounds</code></td><td data-l="Kod?">nie</td></tr>
+   <tr><td data-l="Chcę">dodać wiedzę o frameworku</td><td data-l="Plik"><code>knowledge/&lt;plik&gt;.md</code>, <code>knowledge/index.md</code></td><td data-l="Kod?">nie</td></tr>
+   <tr><td data-l="Chcę">obsłużyć nowy format kodu</td><td data-l="Plik"><code>technologies/&lt;x&gt;.py</code>, <code>technologies/__init__.py</code></td><td data-l="Kod?" class="yes">tak</td></tr>
+   <tr><td data-l="Chcę">nowe źródło wartości pola ze skanera</td><td data-l="Plik"><code>agents/editor.py</code>: <code>scanner_value()</code></td><td data-l="Kod?" class="yes">tak</td></tr>
+   <tr><td data-l="Chcę">dodać etap przebiegu</td><td data-l="Plik"><code>schemas.py</code>, <code>agents/</code>, <code>state.py</code>, <code>graph.py</code>, <code>prompts/</code></td><td data-l="Kod?" class="yes">tak</td></tr>
+  </tbody>
+ </table>
+ </div>
+
+ <h2>Znane ograniczenia</h2>
+ <ul class="ul">
+  <li>Jedna jednostka kodu = jeden plik. Technologie, w których proces składa się z wielu plików, mogą wymagać grupowania w skanerze.</li>
+  <li>Importy dynamiczne (<code>importlib.import_module</code>, <code>__import__</code>) nie są wykrywane.</li>
+  <li>Kod nie sprawdza planu od modelu. Pominięta jednostka po cichu nie trafi do analizy.</li>
+  <li>Recenzent ocenia cały dokument od nowa w każdej rundzie i bywa niewyczerpujący, więc akceptacja może zależeć od przebiegu.</li>
+  <li>Brak wznawiania przerwanego przebiegu, liczenia kosztu i logu w pliku (kroki 35–37 planu).</li>
+  <li><code>probe_llm</code> rekomenduje pierwszą działającą metodę structured output, a dla długich odpowiedzi pewniejsza bywa <code>json_schema</code>.</li>
+  <li>Test ręczny <code>context</code>, <code>planner</code> i <code>graph</code> czyści <code>output/</code>.</li>
+ </ul>
+</section>
+</main>
+
+<script>
+{
+ const reduce=window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+ /* ---------- router ---------- */
+ const tabs=[...document.querySelectorAll('.tab')];
+ const links=[...document.querySelectorAll('#nav > a')];
+ const route=()=>{
+  const id=decodeURIComponent(location.hash.slice(1))||'przeglad';
+  let el=document.getElementById(id),tab=null,target=null;
+  if(el&&el.classList.contains('tab'))tab=el;
+  else if(el){tab=el.closest('.tab');target=el}
+  if(!tab)tab=tabs[0];
+  tabs.forEach(t=>{t.hidden=t!==tab});
+  links.forEach(a=>{if(a.getAttribute('href')==='#'+tab.id)a.setAttribute('aria-current','page');else a.removeAttribute('aria-current')});
+  hideTip(true);
+  if(target)requestAnimationFrame(()=>target.scrollIntoView({block:'start'}));
+  else window.scrollTo(0,0);
+ };
+ /* ---------- tooltip ---------- */
+ const tip=document.getElementById('tip');
+ let pinned=null;
+ const esc=s=>String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;');
+ const showTip=el=>{
+  const name=el.cloneNode(true);name.querySelectorAll('i').forEach(i=>i.remove());
+  tip.innerHTML='<b>'+esc(name.textContent.trim())+'</b><p><span>Czym jest</span>'+esc(el.dataset.w)+'</p><p><span>Rola w projekcie</span>'+esc(el.dataset.r)+'</p>';
+  tip.hidden=false;
+  const r=el.getBoundingClientRect(),tw=tip.offsetWidth,th=tip.offsetHeight;
+  let x=r.left,y=r.bottom+8;
+  if(x+tw>innerWidth-12)x=innerWidth-tw-12;
+  if(x<12)x=12;
+  if(y+th>innerHeight-12)y=r.top-th-8;
+  if(y<12)y=12;
+  tip.style.left=x+'px';tip.style.top=y+'px';
+ };
+ function hideTip(force){if(pinned&&!force)return;if(pinned)pinned.classList.remove('on');pinned=null;tip.classList.remove('pin');tip.hidden=true}
+ const items=document.querySelectorAll('.it[data-w]');
+ items.forEach(el=>{
+  el.addEventListener('mouseenter',()=>{if(!pinned)showTip(el)});
+  el.addEventListener('mouseleave',()=>{if(!pinned)hideTip()});
+  el.addEventListener('focus',()=>{if(!pinned)showTip(el)});
+  el.addEventListener('blur',()=>{if(!pinned)hideTip()});
+  el.addEventListener('click',ev=>{
+   ev.stopPropagation();
+   if(pinned===el){hideTip(true);return}
+   if(pinned)pinned.classList.remove('on');
+   pinned=el;el.classList.add('on');showTip(el);tip.classList.add('pin');
+  });
+ });
+ document.addEventListener('click',ev=>{if(pinned&&!tip.contains(ev.target))hideTip(true)});
+ document.addEventListener('keydown',ev=>{if(ev.key==='Escape')hideTip(true)});
+ window.addEventListener('scroll',()=>{if(pinned)showTip(pinned);else hideTip()},{passive:true});
+ /* ---------- copy buttons ---------- */
+ document.querySelectorAll('.cb').forEach(box=>{
+  const b=document.createElement('button');b.className='cp';b.type='button';b.textContent='Kopiuj';
+  b.addEventListener('click',async()=>{
+   try{await navigator.clipboard.writeText(box.querySelector('pre').textContent);b.textContent='Skopiowano'}
+   catch(e){b.textContent='Zaznacz i skopiuj'}
+   setTimeout(()=>{b.textContent='Kopiuj'},1600);
+  });
+  box.appendChild(b);
+ });
+ /* ---------- overview graph ---------- */
+ const svg=document.getElementById('graph'),gfig=document.getElementById('gfig');
+ const defs='<defs><marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0L10,5L0,10z" fill="#111"/></marker><marker id="ahr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0L10,5L0,10z" fill="#e4002b"/></marker></defs>';
+ const box=(x,y,w,h,t,ai,go,fs)=>`<g data-go="${go}"><rect x="${x-w/2}" y="${y-h/2}" width="${w}" height="${h}" rx="3" class="${ai?'nai':'ncode'}"/><text x="${x}" y="${y}" class="${ai?'tai':'tcode'}" font-size="${fs||15}">${t}</text></g>`;
+ const tok=p=>reduce?'':`<circle r="5" class="tok"><animateMotion dur="5s" repeatCount="indefinite" path="${p}"/></circle>`;
+ const N=5;
+ const draw=()=>{
+  const W=svg.clientWidth;if(!W)return;
+  const hz=W>=720,want=hz?290:560;
+  if(gfig.clientHeight!==want){gfig.style.height=want+'px';return}
+  const H=svg.clientHeight;let e='',n='';
+  if(hz){
+   const w=Math.min(110,W*.12),h=42,aw=Math.min(110,W*.12),ah=22,gp=8;
+   const pad=Math.max(w,aw)/2+2,X=f=>pad+f*(W-2*pad),cy=H*.6;
+   const sk=X(0),pl=X(.19),an=X(.4),ed=X(.61),rv=X(.8),fi=X(1);
+   const tot=N*ah+(N-1)*gp,ay=i=>cy-tot/2+ah/2+i*(ah+gp);
+   const m1=(pl+w/2+an-aw/2)/2,m2=(an+aw/2+ed-w/2)/2;
+   e+=`<path class="edge" marker-end="url(#ah)" d="M${sk+w/2},${cy}H${pl-w/2}"/>`;
+   for(let i=0;i<N;i++){const y=ay(i);
+    e+=`<path class="edge" marker-end="url(#ah)" d="M${pl+w/2},${cy}C${m1},${cy} ${m1},${y} ${an-aw/2},${y}"/>`;
+    e+=`<path class="edge" marker-end="url(#ah)" d="M${an+aw/2},${y}C${m2},${y} ${m2},${cy} ${ed-w/2},${cy}"/>`;
+    n+=box(an,y,aw,ah,i===N-1?'analyze N':'analyze',1,'step-analyze',13)}
+   e+=`<text class="lbl" x="${an}" y="${ay(0)-ah/2-16}">Send: po jednym na jednostkę kodu</text>`;
+   e+=`<path class="edge" marker-end="url(#ah)" d="M${ed+w/2},${cy}H${rv-w/2}"/>`;
+   e+=`<path class="edge" marker-end="url(#ah)" d="M${rv+w/2},${cy}H${fi-w/2}"/>`;
+   e+=`<text class="lbl" x="${(rv+fi)/2}" y="${cy+h/2+18}">review_done</text>`;
+   const y1=cy-h/2,k=70;
+   e+=`<path class="lp" marker-end="url(#ahr)" d="M${rv},${y1}C${rv},${y1-k} ${ed},${y1-k} ${ed},${y1}"/>`;
+   e+=`<text class="lblr" x="${(rv+ed)/2}" y="${y1-.75*k-12}">odrzucony: poprawki</text>`;
+   n+=box(sk,cy,w,h,'scan',0,'step-scan')+box(pl,cy,w,h,'plan',1,'step-plan')+box(ed,cy,w,h,'edit',1,'step-edit')+box(rv,cy,w,h,'review',1,'step-review')+box(fi,cy,w,h,'finalize',0,'step-finalize');
+   svg.innerHTML=defs+e+tok(`M${sk},${cy}H${fi}`)+n;
+  }else{
+   const w=Math.min(190,W*.5),h=38,cx=W*.44,Y=f=>30+f*(H-60);
+   const sk=Y(0),pl=Y(.18),an=Y(.39),ed=Y(.6),rv=Y(.8),fi=Y(1);
+   const step=Math.min(34,(w+30)/N),ax=i=>cx+(i-(N-1)/2)*step,m1=(pl+h/2+an-9)/2,m2=(an+9+ed-h/2)/2;
+   e+=`<path class="edge" marker-end="url(#ah)" d="M${cx},${sk+h/2}V${pl-h/2}"/>`;
+   for(let i=0;i<N;i++){const x=ax(i);
+    e+=`<path class="edge" marker-end="url(#ah)" d="M${cx},${pl+h/2}C${cx},${m1} ${x},${m1} ${x},${an-9}"/>`;
+    e+=`<path class="edge" marker-end="url(#ah)" d="M${x},${an+9}C${x},${m2} ${cx},${m2} ${cx},${ed-h/2}"/>`;
+    n+=`<g data-go="step-analyze"><circle class="nai" cx="${x}" cy="${an}" r="9"/></g>`}
+   n+=`<text class="tcode" x="${ax(N-1)+18}" y="${an}" font-size="14" style="text-anchor:start">analyze ×N</text>`;
+   e+=`<path class="edge" marker-end="url(#ah)" d="M${cx},${ed+h/2}V${rv-h/2}"/>`;
+   e+=`<path class="edge" marker-end="url(#ah)" d="M${cx},${rv+h/2}V${fi-h/2}"/>`;
+   const x1=cx+w/2,k=52;
+   e+=`<path class="lp" marker-end="url(#ahr)" d="M${x1},${rv}C${x1+k},${rv} ${x1+k},${ed} ${x1},${ed}"/>`;
+   e+=`<text class="lblr" transform="translate(${x1+.75*k+12},${(ed+rv)/2}) rotate(90)">poprawki</text>`;
+   n+=box(cx,sk,w,h,'scan',0,'step-scan')+box(cx,pl,w,h,'plan',1,'step-plan')+box(cx,ed,w,h,'edit',1,'step-edit')+box(cx,rv,w,h,'review',1,'step-review')+box(cx,fi,w,h,'finalize',0,'step-finalize');
+   svg.innerHTML=defs+e+tok(`M${cx},${sk}V${fi}`)+n;
+  }
+ };
+ svg.addEventListener('click',ev=>{const g=ev.target.closest('[data-go]');if(g){const t=document.getElementById(g.dataset.go);if(t)t.scrollIntoView({behavior:reduce?'auto':'smooth',block:'start'})}});
+ const gro=new ResizeObserver(draw);gro.observe(svg);
+ window.addEventListener('hashchange',route);
+ route();
+}
+</script>
+</body>
+</html>
