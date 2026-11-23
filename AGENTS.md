@@ -29,7 +29,8 @@ Przepływ grafu: `scan → planner → analyst × N (Send) → editor → review
 ## Sposób pracy
 
 1. **Jeden krok = jedna rzecz = jeden test ręczny = jeden commit.** Nie przechodź dalej, dopóki test bieżącego kroku nie działa.
-2. Przed pisaniem kodu napisz krótko, które pliki zmienisz.
+2. **Przed każdym krokiem: co, po co i zgoda użytkownika.** Zanim zaczniesz krok, napisz, co w nim zrobimy, po co i które pliki się zmienią - i poczekaj na zatwierdzenie. Bez zgody nie pisz kodu.
+   Gdy coś da się zrobić na kilka sposobów, przedstaw warianty z zaletami i wadami każdego - zawsze z punktu widzenia utrzymywalności i czytelności kodu - i wskaż, który polecasz i dlaczego. Decyzję podejmuje użytkownik.
 3. Po zakończeniu kroku podaj dokładne polecenia PowerShell do ręcznego testu i oczekiwany wynik. Potem zatrzymaj się i poczekaj na potwierdzenie.
 4. Nie dodawaj plików, abstrakcji ani zależności spoza bieżącego kroku. Jeśli coś wydaje się potrzebne - zaproponuj i zapytaj.
 5. Jeśli plan wymaga zmiany, zaproponuj ją z uzasadnieniem i poczekaj na decyzję. Nie zmieniaj kierunku po cichu.
