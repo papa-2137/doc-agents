@@ -13,8 +13,8 @@ Do modelu przekazujemy tylko parametry podane w profilu (`params`) - część mo
 np. temperature. Co dany model obsługuje, sprawdza scripts/probe_llm.py.
 
 invoke_structured() to wspólny sposób wywołania modelu ze schematem odpowiedzi (Pydantic) dla
-wszystkich agentów: gdy model nie zwróci odpowiedzi zgodnej ze schematem, rzuca błąd z przyczyną
-(np. finish_reason=length - odpowiedź ucięta na limicie max_tokens z profilu).
+wszystkich agentów: odpowiedź niezgodną ze schematem ponawia (domyślnie 2 próby), a gdy to nie pomoże,
+rzuca błąd z przyczyną (np. finish_reason=length - odpowiedź ucięta na limicie max_tokens z profilu).
 
 Uruchomienie testowe z katalogu repo (jedno krótkie wywołanie modelu agenta `planner`):
     python -m doc_agents.llm
@@ -113,29 +113,44 @@ def get_structured_output_method(config: AppConfig, agent: str) -> str:
 # --- Wywołanie ze schematem odpowiedzi ---
 
 
-def invoke_structured(model: BaseChatModel, schema: type[BaseModel], method: str, messages: list[BaseMessage]) -> BaseModel:
+def invoke_structured(
+    model: BaseChatModel, schema: type[BaseModel], method: str, messages: list[BaseMessage], attempts: int = 2
+) -> BaseModel:
     """Wywołuje model z wiadomościami i schematem odpowiedzi (with_structured_output) i zwraca odpowiedź
-    jako obiekt schematu. Gdy model nie zwróci odpowiedzi zgodnej ze schematem, rzuca RuntimeError
-    z nazwą schematu, powodem zakończenia odpowiedzi (finish_reason), zużyciem tokenów i błędem parsowania.
+    jako obiekt schematu. Gdy odpowiedź jest niezgodna ze schematem, pyta model ponownie - łącznie
+    najwyżej attempts razy. Gdy żadna próba się nie uda (albo odpowiedź została ucięta na limicie
+    max_tokens), rzuca RuntimeError z nazwą schematu, liczbą prób, powodem zakończenia odpowiedzi
+    (finish_reason), zużyciem tokenów i błędem parsowania.
 
-    Po co: bez tego LangChain zwraca po cichu None (np. gdy odpowiedź została ucięta na limicie
-    max_tokens), a błąd wychodzi dopiero dalej, bez przyczyny. include_raw=True daje dostęp do surowej
+    Po co: bez tego LangChain zwraca po cichu None, a błąd wychodzi dopiero dalej, bez przyczyny.
+    Mały model czasem myli się w formacie (np. lista zapisana jako tekst, pominięte pole) - to błąd
+    losowy, więc ponowna próba zwykle przechodzi i jeden taki błąd nie przerywa całego przebiegu.
+    Odpowiedzi uciętej na limicie (finish_reason=length) nie ponawiamy - przy tym samym limicie
+    skończyłaby się tak samo; trzeba zwiększyć max_tokens. include_raw=True daje dostęp do surowej
     odpowiedzi modelu, z której odczytujemy przyczynę. Jedno miejsce dla wszystkich agentów.
     Argumenty: method - metoda structured output z profilu (get_structured_output_method).
     """
     model_ze_schematem = model.with_structured_output(schema, method=method, include_raw=True)
-    wynik = model_ze_schematem.invoke(messages)
 
-    if wynik["parsed"] is None:
-        surowa_odpowiedz = wynik["raw"]
-        komunikat_bledu = (
-            f"Model nie zwrócił odpowiedzi zgodnej ze schematem {schema.__name__}. "
-            f"finish_reason={surowa_odpowiedz.response_metadata.get('finish_reason')}, "
-            f"tokeny={surowa_odpowiedz.usage_metadata}, "
-            f"błąd parsowania={wynik['parsing_error']}. "
-            f"Przy finish_reason=length zwiększ max_tokens w profilu modelu w config.yaml."
-        )
-        raise RuntimeError(komunikat_bledu)
+    numer_proby = 0
+    while True:
+        numer_proby += 1
+        wynik = model_ze_schematem.invoke(messages)
+        if wynik["parsed"] is not None:
+            break
+
+        finish_reason = wynik["raw"].response_metadata.get("finish_reason")
+        if finish_reason == "length" or numer_proby >= attempts:
+            podpowiedz = ""
+            if finish_reason == "length":
+                podpowiedz = " Odpowiedź ucięta na limicie - zwiększ max_tokens w profilu modelu w config.yaml."
+            komunikat_bledu = (
+                f"Model nie zwrócił odpowiedzi zgodnej ze schematem {schema.__name__} (próby: {numer_proby}). "
+                f"finish_reason={finish_reason}, "
+                f"tokeny={wynik['raw'].usage_metadata}, "
+                f"błąd parsowania={wynik['parsing_error']}.{podpowiedz}"
+            )
+            raise RuntimeError(komunikat_bledu)
 
     odpowiedz = wynik["parsed"]
     return odpowiedz

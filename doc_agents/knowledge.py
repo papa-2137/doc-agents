@@ -16,7 +16,8 @@ Szablony dokumentu (knowledge_base/templates/) nie są częścią spisu. Planner
     - load_fixed_sections() - stałe rozdziały części opisowej (tytuł i instrukcja) z descriptive_template.yaml,
     - load_formal_field_titles() - tytuły pól części formalnej z formal_template.yaml (żeby nie
       proponował rozdziałów, które je powtarzają).
-Redaktor dostaje pełny opis pól części formalnej przez load_formal_fields().
+Redaktor dostaje pełny opis pól części formalnej przez load_formal_fields() i tytuły wymaganych
+rozdziałów części opisowej przez load_required_section_titles().
 
 Test ręczny z katalogu repo (wypisuje wpisy spisu, stałe rozdziały, pola części formalnej i treść jednego pliku,
 sprawdza blokadę ścieżki spoza bazy):
@@ -123,24 +124,47 @@ def read_kb_file(knowledge_base_dir: str, filename: str) -> str:
 # --- Szablony dokumentu ---
 
 
-def load_fixed_sections(knowledge_base_dir: str) -> list[DescriptiveSection]:
-    """Wczytuje templates/descriptive_template.yaml z katalogu bazy wiedzy i zwraca stałe rozdziały
-    (tytuł i instrukcja) w kolejności z pliku.
+def load_descriptive_template(knowledge_base_dir: str) -> list[dict]:
+    """Wczytuje templates/descriptive_template.yaml z katalogu bazy wiedzy i zwraca listę stałych rozdziałów
+    (słowniki z kluczami z YAML: title, required, instruction) w kolejności z pliku.
 
-    Po co: stałe rozdziały konfiguruje zespół w YAML, a planner musi je dostać, żeby wpisać je do planu.
-    Pole required z YAML nie jest tu zwracane - planner dostaje wszystkie rozdziały; wymagane sprawdzi
-    recenzent. Argument: config.paths.knowledge_base.
+    Po co: jedno miejsce odczytu szablonu części opisowej - planner bierze z niego rozdziały,
+    redaktor listę rozdziałów wymaganych. Argument: config.paths.knowledge_base.
     """
     template_path = os.path.join(knowledge_base_dir, "templates", "descriptive_template.yaml")
     with open(template_path, encoding="utf-8") as f:
         dane_szablonu = yaml.safe_load(f)
 
+    rozdzialy = dane_szablonu["sections"]
+    return rozdzialy
+
+
+def load_fixed_sections(knowledge_base_dir: str) -> list[DescriptiveSection]:
+    """Zwraca stałe rozdziały części opisowej (tytuł i instrukcja) z descriptive_template.yaml w kolejności z pliku.
+
+    Po co: stałe rozdziały konfiguruje zespół w YAML, a planner musi je dostać, żeby wpisać je do planu.
+    Planner dostaje wszystkie rozdziały, bez pola required (wymagane sprawdza redaktor -
+    load_required_section_titles). Argument: config.paths.knowledge_base.
+    """
     stale_rozdzialy = []
-    for section_data in dane_szablonu["sections"]:
+    for section_data in load_descriptive_template(knowledge_base_dir):
         stale_rozdzialy.append(
             DescriptiveSection(title=section_data["title"], instruction=section_data["instruction"].strip())
         )
     return stale_rozdzialy
+
+
+def load_required_section_titles(knowledge_base_dir: str) -> list[str]:
+    """Zwraca tytuły rozdziałów części opisowej oznaczonych w descriptive_template.yaml jako required: true.
+
+    Po co: redaktor sprawdza kodem, czy każdy wymagany rozdział (np. „Ścieżki procesu krok po kroku”)
+    jest w dokumencie i ma treść. Argument: config.paths.knowledge_base.
+    """
+    tytuly_wymagane = []
+    for section_data in load_descriptive_template(knowledge_base_dir):
+        if section_data["required"]:
+            tytuly_wymagane.append(section_data["title"])
+    return tytuly_wymagane
 
 
 def load_formal_fields(knowledge_base_dir: str) -> list[dict]:

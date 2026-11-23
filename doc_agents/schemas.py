@@ -3,10 +3,11 @@
 Co zawiera: opis kształtu danych, które jeden etap produkuje, a następny odbiera:
     skaner -> ProjectMap -> planner -> Plan -> analitycy -> ModuleNote -> redaktor -> recenzent -> ReviewResult
 Na tym etapie: mapa projektu (FileEntry, CodeUnit, ProjectMap), plan plannera (AnalysisTask,
-DescriptiveSection, Plan), notatka analityka (ModuleNote) i część formalna redaktora
-(FormalField, FormalSection). ReviewResult dojdzie w kolejnym kroku.
+DescriptiveSection, Plan), notatka analityka (ModuleNote) oraz części dokumentu od redaktora:
+formalna (FormalField, FormalSection) i opisowa (DescriptiveChapter, DescriptivePart).
+ReviewResult dojdzie w kolejnym kroku.
 
-Schematy odpowiedzi modelu (Plan i jego części, ModuleNote, FormalSection) mają przy polach Field(description="...") - wyjątek
+Schematy odpowiedzi modelu (Plan i jego części, ModuleNote, FormalSection, DescriptivePart) mają przy polach Field(description="...") - wyjątek
 od zasady prostoty z AGENTS.md: model widzi tylko schemat JSON, a opis pola jedzie razem z nim,
 więc nie rozjedzie się z kodem (komentarze # do modelu nie trafiają). Pozostałe schematy - same typy.
 
@@ -168,6 +169,27 @@ class FormalSection(BaseModel):
     """Wypełnione pola części formalnej."""
 
     fields: list[FormalField] = Field(description="Po jednym wpisie dla każdego pola z listy pól do wypełnienia.")
+
+
+# --- Część opisowa (wynik redaktora, schemat odpowiedzi modelu) ---
+
+
+class DescriptiveChapter(BaseModel):
+    """Jeden rozdział części opisowej: tytuł z planu i treść w Markdown."""
+
+    title: str = Field(description="Tytuł rozdziału dokładnie jak w liście rozdziałów do napisania.")
+    content: str = Field(
+        description="Treść rozdziału w Markdown, bez nagłówków #, ## i ### (nagłówek wstawia kod); "
+        "podsekcje nagłówkiem ####. Pusty tekst, gdy notatki nie dają informacji."
+    )
+
+
+class DescriptivePart(BaseModel):
+    """Napisane rozdziały części opisowej."""
+
+    chapters: list[DescriptiveChapter] = Field(
+        description="Po jednym rozdziale dla każdej pozycji z listy rozdziałów, w tej samej kolejności."
+    )
 
 
 # --- Test ręczny ---

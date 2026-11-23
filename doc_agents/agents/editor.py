@@ -1,6 +1,6 @@
-"""Agent redaktor - część formalna dokumentu: lista kontrolna informacji operacyjnych o robocie.
+"""Agent redaktor: składa dokument z części formalnej i opisowej.
 
-Co robi: create_formal_part() wypełnia pola części formalnej opisane w
+Część formalna - lista kontrolna informacji operacyjnych o robocie. create_formal_part() wypełnia pola części formalnej opisane w
 knowledge_base/templates/formal_template.yaml i składa z nich Markdown według
 knowledge_base/templates/formal_template.md (Jinja2). Kod nie zna konkretnych pól - wszystko
 wynika z szablonów, więc nowe pole to tylko wpis w YAML (i ewentualnie zmiana układu w .md).
@@ -18,13 +18,23 @@ Braki: pole wymagane (required: true) bez wartości renderuje się jako „_Brak
 nazwa trafia na listę braków (wydruk i output/formal_missing.txt). Pole o nazwie spoza szablonu
 w odpowiedzi modelu jest pomijane. Dokument powstaje zawsze; uzupełnienie braków zleci recenzent.
 
-Wyniki w output/: formal.md (część formalna), formal_section.json (wszystkie pola z wartościami),
-formal_missing.txt (lista braków).
+Część opisowa - rozdziały z planu (plan.sections), w tym stałe z descriptive_template.yaml.
+create_descriptive_part() wywołuje model drugi raz: dostaje rozdziały z instrukcjami, notatki,
+gotową część formalną (żeby jej nie powtarzać) i pliki wiedzy redaktora. Model zwraca DescriptivePart:
+listę rozdziałów (tytuł, treść w Markdown). Nagłówki ### wstawia kod w kolejności z planu;
+rozdziały o tytułach spoza planu są pomijane. Rozdział wymagany (required: true w YAML) bez treści
+albo nieobecny w planie dostaje „_Brak danych._” i trafia na listę braków.
+
+Cały dokument składa render_document() z szablonu knowledge_base/templates/document_template.md
+(tytuł, część formalna, część opisowa) - układ zmienia się w szablonie, nie w kodzie.
+
+Wyniki w output/: formal.md, formal_section.json, formal_missing.txt, descriptive_part.json,
+descriptive_missing.txt i document.md (cały dokument).
 
 Na tym etapie redaktor działa bez grafu (węzeł redaktora dojdzie w kroku 32).
 
 Test ręczny z katalogu repo - na wynikach poprzedniego uruchomienia main.py (output/ nie jest
-czyszczony, model wołany tylko dla redaktora; wymaga LLM_API_KEY i LLM_BASE_URL):
+czyszczony; dwa wywołania modelu: część formalna i opisowa; wymaga LLM_API_KEY i LLM_BASE_URL):
     python -m doc_agents.agents.editor
 """
 
@@ -36,11 +46,19 @@ from langchain_core.messages import HumanMessage, SystemMessage
 
 from doc_agents.config import load_config
 from doc_agents.context import RunContext, create_run_context
-from doc_agents.knowledge import load_formal_fields, read_kb_file
+from doc_agents.knowledge import load_formal_fields, load_required_section_titles, read_kb_file
 from doc_agents.llm import get_structured_output_method, invoke_structured
 from doc_agents.output import RunStore
 from doc_agents.prompts import render_prompt
-from doc_agents.schemas import FormalField, FormalSection, ModuleNote, Plan, ProjectMap
+from doc_agents.schemas import (
+    DescriptivePart,
+    DescriptiveSection,
+    FormalField,
+    FormalSection,
+    ModuleNote,
+    Plan,
+    ProjectMap,
+)
 
 
 # --- Pola ze skanera ---
@@ -245,6 +263,137 @@ def save_formal_part(run_store: RunStore, markdown: str, section: FormalSection,
     run_store.save_text("formal_missing.txt", tekst_brakow + "\n")
 
 
+# --- Część opisowa ---
+
+
+def build_sections_text(sections: list[DescriptiveSection]) -> str:
+    """Zwraca rozdziały do napisania (tytuł i instrukcja) jako JSON, w kolejności z planu.
+
+    Po co: model dostaje dokładnie te rozdziały, które zaplanował planner, z instrukcją dla każdego.
+    """
+    rozdzialy_dane = []
+    for section in sections:
+        rozdzialy_dane.append(section.model_dump())
+    tekst_rozdzialow = json.dumps(rozdzialy_dane, indent=2, ensure_ascii=False)
+    return tekst_rozdzialow
+
+
+def ask_descriptive_part(
+    project_map: ProjectMap, plan: Plan, notes: list[ModuleNote], formal_markdown: str, context: RunContext
+) -> DescriptivePart:
+    """Wywołuje model agenta editor dla rozdziałów części opisowej z planu i zwraca jego odpowiedź (DescriptivePart).
+
+    Po co: drugie wywołanie redaktora - pisze rozdziały dla osoby utrzymującej robota. Model widzi
+    gotową część formalną, żeby jej nie powtarzać.
+    """
+    config = context.config
+    variables = {
+        "project_name": project_map.project_name,
+        "plan_summary": plan.summary,
+        "sections": build_sections_text(plan.sections),
+        "formal_part": formal_markdown,
+        "notes": build_notes_text(notes),
+        "kb_files": build_editor_kb_text(config.paths.knowledge_base, plan.editor_kb_files),
+    }
+    system_text, user_text = render_prompt(config.paths.prompts, "editor_descriptive", variables)
+    odpowiedz = invoke_structured(
+        context.models["editor"],
+        DescriptivePart,
+        get_structured_output_method(config, "editor"),
+        [SystemMessage(content=system_text), HumanMessage(content=user_text)],
+    )
+    return odpowiedz
+
+
+def assemble_descriptive_part(
+    sections: list[DescriptiveSection], part: DescriptivePart, required_titles: list[str]
+) -> tuple[str, list[str]]:
+    """Składa Markdown części opisowej: rozdział po rozdziale w kolejności z planu, z nagłówkiem ### i treścią
+    od modelu. Rozdziały wymagane, których nie ma w planie, dochodzą na końcu. Rozdział bez treści dostaje
+    „_Brak danych._”. Zwraca (Markdown, lista tytułów wymaganych rozdziałów bez treści).
+
+    Po co: kolejność i nagłówki zawsze wynikają z planu, a obecność wymaganych rozdziałów (np. „Ścieżki procesu
+    krok po kroku”) sprawdza kod - bez czekania na recenzenta. Tytuły porównywane bez wielkości liter.
+    """
+    tresci = {}
+    for chapter in part.chapters:
+        tresci[chapter.title.strip().lower()] = chapter.content.strip()
+
+    tytuly = []
+    for section in sections:
+        tytuly.append(section.title)
+    tytuly_male = []
+    for title in tytuly:
+        tytuly_male.append(title.strip().lower())
+    for title in required_titles:
+        if title.strip().lower() not in tytuly_male:
+            tytuly.append(title)
+
+    tytuly_wymagane_male = []
+    for title in required_titles:
+        tytuly_wymagane_male.append(title.strip().lower())
+
+    czesci = []
+    braki = []
+    for title in tytuly:
+        content = tresci.get(title.strip().lower(), "")
+        if content == "":
+            content = "_Brak danych._"
+            if title.strip().lower() in tytuly_wymagane_male:
+                braki.append(title)
+        czesci.append(f"### {title}\n\n{content}\n")
+
+    wynik = ("\n".join(czesci), braki)
+    return wynik
+
+
+def create_descriptive_part(
+    project_map: ProjectMap, plan: Plan, notes: list[ModuleNote], formal_markdown: str, context: RunContext
+) -> tuple[str, DescriptivePart, list[str]]:
+    """Tworzy część opisową: wywołuje model dla rozdziałów z planu, składa Markdown z nagłówkami i sprawdza
+    wymagane rozdziały. Zwraca (Markdown części opisowej, odpowiedź modelu, lista brakujących wymaganych rozdziałów).
+
+    Po co: cała logika części opisowej w jednej funkcji - użyje jej węzeł redaktora (krok 32) i test ręczny.
+    """
+    part = ask_descriptive_part(project_map, plan, notes, formal_markdown, context)
+    required_titles = load_required_section_titles(context.config.paths.knowledge_base)
+    markdown, missing = assemble_descriptive_part(plan.sections, part, required_titles)
+
+    wynik = (markdown, part, missing)
+    return wynik
+
+
+def save_descriptive_part(run_store: RunStore, part: DescriptivePart, missing: list[str]) -> None:
+    """Zapisuje w output/ odpowiedź modelu z rozdziałami (descriptive_part.json) i listę brakujących
+    wymaganych rozdziałów (descriptive_missing.txt; „brak” gdy wszystkie są).
+
+    Po co: po przebiegu widać surową treść rozdziałów i braki, niezależnie od złożonego dokumentu.
+    """
+    run_store.save_json("descriptive_part.json", part)
+    tekst_brakow = "brak"
+    if missing:
+        tekst_brakow = "\n".join(missing)
+    run_store.save_text("descriptive_missing.txt", tekst_brakow + "\n")
+
+
+# --- Cały dokument ---
+
+
+def render_document(knowledge_base_dir: str, project_name: str, formal_markdown: str, descriptive_markdown: str) -> str:
+    """Składa cały dokument z szablonu templates/document_template.md (Jinja2): tytuł, część formalna, część opisowa.
+
+    Po co: układ całego dokumentu (np. tytuł, data, stopka) zespół zmienia w szablonie, bez zmian w kodzie.
+    """
+    template_path = os.path.join(knowledge_base_dir, "templates", "document_template.md")
+    with open(template_path, encoding="utf-8") as f:
+        tekst_szablonu = f.read()
+    srodowisko = Environment(undefined=StrictUndefined, keep_trailing_newline=True)
+    dokument = srodowisko.from_string(tekst_szablonu).render(
+        project_name=project_name, formal_part=formal_markdown, descriptive_part=descriptive_markdown
+    )
+    return dokument
+
+
 # --- Wczytanie wyników poprzednich etapów ---
 
 
@@ -262,17 +411,27 @@ def load_notes(run_store: RunStore) -> list[ModuleNote]:
 # --- Wyświetlanie ---
 
 
-def print_formal_part(markdown: str, missing: list[str]) -> None:
-    """Wypisuje złożoną część formalną i listę brakujących pól wymaganych.
+def print_missing(title: str, missing: list[str]) -> None:
+    """Wypisuje nagłówek i listę braków („brak”, gdy lista pusta).
 
-    Po co: przy teście ręcznym widać od razu gotowy fragment dokumentu i to, czego w nim brakuje.
+    Po co: wspólny format listy brakujących pól i rozdziałów w teście ręcznym.
     """
-    print(markdown)
-    print("=== Brakujące pola wymagane ===")
+    print(f"=== {title} ===")
     if not missing:
         print("brak")
     for name in missing:
         print(f"- {name}")
+
+
+def print_document(document: str, formal_missing: list[str], descriptive_missing: list[str], document_path: str) -> None:
+    """Wypisuje cały dokument, listy braków w obu częściach i ścieżkę zapisanego pliku.
+
+    Po co: przy teście ręcznym widać od razu gotowy dokument i to, czego w nim brakuje.
+    """
+    print(document)
+    print_missing("Brakujące pola wymagane (część formalna)", formal_missing)
+    print_missing("Brakujące rozdziały wymagane (część opisowa)", descriptive_missing)
+    print(f"\nDokument: {document_path}")
 
 
 def print_missing_inputs(output_dir: str) -> None:
@@ -289,9 +448,10 @@ def print_missing_inputs(output_dir: str) -> None:
 
 def manual_test() -> None:
     """Test ręczny: na wynikach poprzedniego uruchomienia main.py (output/ bez czyszczenia) tworzy część
-    formalną (jedno wywołanie modelu), zapisuje ją w output/ i wypisuje razem z listą braków.
+    formalną i opisową (dwa wywołania modelu), składa cały dokument, zapisuje wyniki w output/
+    i wypisuje dokument razem z listami braków.
 
-    Po co: strojenie promptu i szablonu części formalnej na stałych danych wejściowych - bez kosztu
+    Po co: strojenie promptów i szablonów redaktora na stałych danych wejściowych - bez kosztu
     ponownej analizy i z porównywalnymi wynikami między uruchomieniami.
     """
     repo_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -306,9 +466,17 @@ def manual_test() -> None:
     plan = run_store.load_json("plan.json", Plan)
     notes = load_notes(run_store)
 
-    markdown, section, missing = create_formal_part(project_map, plan, notes, context)
-    save_formal_part(run_store, markdown, section, missing)
-    print_formal_part(markdown, missing)
+    formal_markdown, section, formal_missing = create_formal_part(project_map, plan, notes, context)
+    save_formal_part(run_store, formal_markdown, section, formal_missing)
+    descriptive_markdown, part, descriptive_missing = create_descriptive_part(
+        project_map, plan, notes, formal_markdown, context
+    )
+    save_descriptive_part(run_store, part, descriptive_missing)
+
+    knowledge_base_dir = config.paths.knowledge_base
+    document = render_document(knowledge_base_dir, project_map.project_name, formal_markdown, descriptive_markdown)
+    document_path = run_store.save_text("document.md", document)
+    print_document(document, formal_missing, descriptive_missing, document_path)
 
 
 if __name__ == "__main__":

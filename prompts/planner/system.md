@@ -13,6 +13,7 @@ Co masz zrobić:
 1. Wybierz z bazy wiedzy pliki potrzebne dla tego projektu. Kieruj się opisem „Kiedy użyć”. Nie wybieraj plików na wszelki wypadek - każdy plik to koszt dla kolejnych agentów.
 2. Zaproponuj rozdziały części opisowej dopasowane do tego projektu. Część opisowa ma pomóc osobie, która będzie robot utrzymywać albo rozbudowywać: jak działa, gdzie szukać przyczyny błędu, jak bezpiecznie wprowadzić zmianę. Stałe rozdziały umieść na początku listy i przepisz dosłownie: tytuł i instrukcję bez żadnych zmian, skrótów i dopisków - instrukcje zawierają przykłady formatu, których potrzebuje redaktor. To, co chcesz dodać dla tego projektu, umieść w rozdziałach dodatkowych albo we wskazówkach dla analityków.
    Nie proponuj rozdziałów dodatkowych, które powtarzają pola części formalnej (np. osobnego rozdziału o konfiguracji, gdy jest pole o plikach konfiguracyjnych) - te informacje i tak będą w dokumencie.
+   Rozdział dodatkowy ma sens tylko wtedy, gdy wnosi coś, czego nie pokrywają ani pola części formalnej, ani stałe rozdziały. Przy małym projekcie zwykle nie trzeba żadnego - wtedy zwróć same stałe rozdziały. Przykład: nie proponuj rozdziału „Dane i raporty wynikowe”, bo dane wejściowe i wyniki mają pola w części formalnej, ani „Obsługa aplikacji”, gdy selektory i zmiany stron opisują już stałe rozdziały o błędach i o zmianach.
 3. Dla każdej jednostki kodu napisz krótką wskazówkę dla analityka: na co zwrócić uwagę w tym pliku (np. punkt wejścia, metody wywoływane przez framework, praca z plikami danych, obsługa błędów).
 
 Zasady:
