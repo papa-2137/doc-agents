@@ -96,6 +96,13 @@ pre{margin:0;border:1.5px solid var(--ink);padding:14px 16px;font:13.5px/1.5 var
 #tip p{margin:0 0 8px}
 #tip p:last-child{margin:0}
 #tip p span{display:block;font-size:13px;color:var(--mute)}
+#tip ul{margin:0 0 8px;padding-left:18px}
+#tip li{margin:2px 0}
+#tip .tk{font-size:13px;color:var(--mute);margin-top:-4px}
+#tip .th{font-size:13px;color:var(--mute)}
+#tip code{font-size:13px}
+g[data-go]:focus{outline:none}
+g[data-go]:focus-visible rect,g[data-go]:focus-visible circle{stroke:var(--red);stroke-width:3}
 #tip.pin{pointer-events:auto;outline:3px solid var(--red);outline-offset:-1px}
 /* overview graph */
 .fig{position:relative;height:290px;margin:10px 0}
@@ -389,7 +396,7 @@ python -m scripts.probe_llm --profile medium</pre></div></li>
 <!-- ====================== PRZEPŁYW ====================== -->
 <section class="tab" id="przeplyw" hidden>
  <h1>Przepływ działania: od <code>python main.py</code> do <code>final.md</code></h1>
- <p class="lead">Na górze mapa grafu (kliknij węzeł, aby przejść do szczegółów). Pod nią każdy krok osobno: co czyta, co się w nim wykonuje (funkcje w kolejności wywołań) i co zapisuje lub zwraca.</p>
+ <p class="lead">Na górze mapa grafu: najedź na węzeł, aby zobaczyć jego zadanie w skrócie, kliknij, aby przejść do szczegółów. Pod nią każdy krok osobno: co czyta, co się w nim wykonuje (funkcje w kolejności wywołań) i co zapisuje lub zwraca.</p>
  <div class="fig" id="gfig"><svg id="graph" role="img" aria-label="Graf: scan, plan, analyze równolegle, edit, review z pętlą poprawek do edit, finalize"></svg></div>
  <div class="legend">
   <span><i class="mk ai"></i>węzeł z wywołaniem modelu</span><span><i class="mk"></i>węzeł bez AI</span>
@@ -1132,9 +1139,7 @@ def x_node(state: DocState, runtime: Runtime[RunContext]) -> dict:
  const tip=document.getElementById('tip');
  let pinned=null;
  const esc=s=>String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;');
- const showTip=el=>{
-  const name=el.cloneNode(true);name.querySelectorAll('i').forEach(i=>i.remove());
-  tip.innerHTML='<b>'+esc(name.textContent.trim())+'</b><p><span>Czym jest</span>'+esc(el.dataset.w)+'</p><p><span>Rola w projekcie</span>'+esc(el.dataset.r)+'</p>';
+ const place=el=>{
   tip.hidden=false;
   const r=el.getBoundingClientRect(),tw=tip.offsetWidth,th=tip.offsetHeight;
   let x=r.left,y=r.bottom+8;
@@ -1143,6 +1148,25 @@ def x_node(state: DocState, runtime: Runtime[RunContext]) -> dict:
   if(y+th>innerHeight-12)y=r.top-th-8;
   if(y<12)y=12;
   tip.style.left=x+'px';tip.style.top=y+'px';
+ };
+ const showTip=el=>{
+  const name=el.cloneNode(true);name.querySelectorAll('i').forEach(i=>i.remove());
+  tip.innerHTML='<b>'+esc(name.textContent.trim())+'</b><p><span>Czym jest</span>'+esc(el.dataset.w)+'</p><p><span>Rola w projekcie</span>'+esc(el.dataset.r)+'</p>';
+  place(el);
+ };
+ /* karty węzłów grafu: tytuł, rodzaj, zdanie wstępu, punkty, wynik */
+ const nodeInfo={
+  'step-scan':{t:'scan',k:'bez AI, scanner.py',l:'Deterministycznie, bez modelu i bez czytania treści plików, buduje mapę projektu:',p:['listę plików (pomija scan.ignore i każde venv)','rolę każdego pliku: secret, source, config, docs, data, binary, other','pliki frameworku skopiowanego do projektu (scan.frameworks)','technologię projektu (dziś Python)','punkty wejścia (main.py, blok if __name__)','jednostki kodu do analizy: niepuste pliki źródłowe spoza frameworku'],w:'output/project_map.json'},
+  'step-plan':{t:'plan',k:'agent AI, profil small',l:'Planista dzieli pracę, zanim ktokolwiek przeczyta kod. Na podstawie mapy projektu ustala:',p:['zadanie ze wskazówką dla każdej jednostki kodu','pliki bazy wiedzy dla analityków','pliki bazy wiedzy dla redaktora','rozdziały części opisowej: stałe z szablonu i dobrane do projektu','krótkie podsumowanie, czym jest projekt'],w:'output/plan.json'},
+  'step-analyze':{t:'analyze ×N',k:'agent AI, profil small',l:'Równoległa analiza każdej jednostki kodu osobno, najwyżej max_concurrency naraz. Każdy analityk:',p:['czyta pełny kod jednostki (szkielet, gdy plik przekracza limit)','widzi szkielety pozostałych plików projektu','dostaje wskazówkę planisty i wybraną wiedzę','notuje kroki procesu, obsługę błędów, wejścia i wyjścia, konfigurację, pułapki i wskazówki dla opiekuna'],w:'output/notes/<jednostka>.json'},
+  'step-edit':{t:'edit',k:'agent AI, profil medium, 2 wywołania',l:'Redaktor składa dokument z notatek analityków i szablonów:',p:['część formalna: pola z formal_template.yaml (część wypełnia skaner, część model)','część opisowa: rozdziały z planu','złożenie całości z document_template.md','lista braków wymaganych pól i rozdziałów','w rundzie poprawek: poprawia tylko miejsca wskazane przez recenzenta'],w:'output/document_NN.md'},
+  'step-review':{t:'review',k:'agent AI, profil medium',l:'Recenzent łączy kontrolę kodem z oceną modelu:',p:['kod: brak wymaganego pola lub rozdziału zawsze blokuje akceptację','model: czy każde zdanie wynika z notatek','model: sprzeczności, ogólniki, kompletność ścieżek procesu, wartości sekretów','decyzja: akceptacja albo powrót do edit, najwyżej max_review_rounds razy'],w:'output/review_NN.json'},
+  'step-finalize':{t:'finalize',k:'bez AI, graph.py',l:'Zapisuje ostatnią wersję dokumentu w stałym miejscu:',p:['wersję zaakceptowaną albo ostatnią przed limitem rund','bez zmian w stanie grafu, potem END'],w:'output/final.md'}
+ };
+ const showNode=g=>{
+  const d=nodeInfo[g.dataset.go];if(!d)return;
+  tip.innerHTML='<b>'+esc(d.t)+'</b><p class="tk">'+esc(d.k)+'</p><p>'+esc(d.l)+'</p><ul>'+d.p.map(x=>'<li>'+esc(x)+'</li>').join('')+'</ul><p><span>Wynik</span><code>'+esc(d.w)+'</code></p><p class="th">Kliknij, aby przejść do szczegółów.</p>';
+  place(g);
  };
  function hideTip(force){if(pinned&&!force)return;if(pinned)pinned.classList.remove('on');pinned=null;tip.classList.remove('pin');tip.hidden=true}
  const items=document.querySelectorAll('.it[data-w]');
@@ -1174,7 +1198,7 @@ def x_node(state: DocState, runtime: Runtime[RunContext]) -> dict:
  /* ---------- overview graph ---------- */
  const svg=document.getElementById('graph'),gfig=document.getElementById('gfig');
  const defs='<defs><marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0L10,5L0,10z" fill="#111"/></marker><marker id="ahr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0L10,5L0,10z" fill="#e4002b"/></marker></defs>';
- const box=(x,y,w,h,t,ai,go,fs)=>`<g data-go="${go}"><rect x="${x-w/2}" y="${y-h/2}" width="${w}" height="${h}" rx="3" class="${ai?'nai':'ncode'}"/><text x="${x}" y="${y}" class="${ai?'tai':'tcode'}" font-size="${fs||15}">${t}</text></g>`;
+ const box=(x,y,w,h,t,ai,go,fs)=>`<g data-go="${go}" tabindex="0" role="button" aria-label="${t}: szczegóły"><rect x="${x-w/2}" y="${y-h/2}" width="${w}" height="${h}" rx="3" class="${ai?'nai':'ncode'}"/><text x="${x}" y="${y}" class="${ai?'tai':'tcode'}" font-size="${fs||15}">${t}</text></g>`;
  const tok=p=>reduce?'':`<circle r="5" class="tok"><animateMotion dur="5s" repeatCount="indefinite" path="${p}"/></circle>`;
  const N=5;
  const draw=()=>{
@@ -1210,7 +1234,7 @@ def x_node(state: DocState, runtime: Runtime[RunContext]) -> dict:
    for(let i=0;i<N;i++){const x=ax(i);
     e+=`<path class="edge" marker-end="url(#ah)" d="M${cx},${pl+h/2}C${cx},${m1} ${x},${m1} ${x},${an-9}"/>`;
     e+=`<path class="edge" marker-end="url(#ah)" d="M${x},${an+9}C${x},${m2} ${cx},${m2} ${cx},${ed-h/2}"/>`;
-    n+=`<g data-go="step-analyze"><circle class="nai" cx="${x}" cy="${an}" r="9"/></g>`}
+    n+=`<g data-go="step-analyze" tabindex="0" role="button" aria-label="analyze: szczegóły"><circle class="nai" cx="${x}" cy="${an}" r="9"/></g>`}
    n+=`<text class="tcode" x="${ax(N-1)+18}" y="${an}" font-size="14" style="text-anchor:start">analyze ×N</text>`;
    e+=`<path class="edge" marker-end="url(#ah)" d="M${cx},${ed+h/2}V${rv-h/2}"/>`;
    e+=`<path class="edge" marker-end="url(#ah)" d="M${cx},${rv+h/2}V${fi-h/2}"/>`;
@@ -1221,7 +1245,13 @@ def x_node(state: DocState, runtime: Runtime[RunContext]) -> dict:
    svg.innerHTML=defs+e+tok(`M${cx},${sk}V${fi}`)+n;
   }
  };
- svg.addEventListener('click',ev=>{const g=ev.target.closest('[data-go]');if(g){const t=document.getElementById(g.dataset.go);if(t)t.scrollIntoView({behavior:reduce?'auto':'smooth',block:'start'})}});
+ const goTo=g=>{hideTip(true);const t=document.getElementById(g.dataset.go);if(t)t.scrollIntoView({behavior:reduce?'auto':'smooth',block:'start'})};
+ svg.addEventListener('click',ev=>{const g=ev.target.closest('[data-go]');if(g){ev.stopPropagation();goTo(g)}});
+ svg.addEventListener('mouseover',ev=>{const g=ev.target.closest('[data-go]');if(g&&!pinned)showNode(g)});
+ svg.addEventListener('mouseout',ev=>{const g=ev.target.closest('[data-go]');if(g&&!g.contains(ev.relatedTarget)&&!pinned)hideTip()});
+ svg.addEventListener('focusin',ev=>{const g=ev.target.closest('[data-go]');if(g&&!pinned)showNode(g)});
+ svg.addEventListener('focusout',()=>{if(!pinned)hideTip()});
+ svg.addEventListener('keydown',ev=>{const g=ev.target.closest('[data-go]');if(g&&(ev.key==='Enter'||ev.key===' ')){ev.preventDefault();goTo(g)}});
  const gro=new ResizeObserver(draw);gro.observe(svg);
  window.addEventListener('hashchange',route);
  route();
